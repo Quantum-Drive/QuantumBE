@@ -9,7 +9,7 @@ from modules.db.schema import UserSchema, UserSchemaAdd
 from modules.db.crud import dbRegisterUser
 from modules.db.base import getDB
 
-from .dependencies import getUser
+from .dependencies import loginManager, getUser
 
 router = APIRouter(prefix="/auth")
 
@@ -38,8 +38,8 @@ async def login(formData: OAuth2PasswordRequestForm = Depends()):
     
     # 로그인 세션 생성
     # response = RedirectResponse(url="/protected", status_code=302)
-    response = JSONResponse({"message": "Login successful"}, status_code=302)
-    Depends().set_cookie(response, Depends().create_access_token(data={'sub':user["username"]},
+    response = JSONResponse({"message": "Login successfully"}, status_code=302)
+    loginManager.set_cookie(response, loginManager.create_access_token(data={'sub':user.email},
                                                                        scopes=['read:protected', 'write:protected']))
     return response
   else:

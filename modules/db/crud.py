@@ -18,6 +18,3 @@ def dbRegisterUser(db: Session, user: UserSchemaAdd):
   db.refresh(dbItem)
   return dbItem
 
-def dbLoadUser(db: Session, email: str):
-  dbItem = db.query(User).filter(User.email == email).first()
-  return dbItem
