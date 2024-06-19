@@ -1,3 +1,4 @@
+from fastapi import UploadFile, File, Query
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -9,8 +10,8 @@ class UserSchema(BaseModel):
   username: str
   password: str
   profilePath: Optional[str]
-  created_at: datetime
-  last_used: datetime
+  createdAt: datetime
+  lastUsed: datetime
   
   class Config:
     from_attributes = True
@@ -19,25 +20,25 @@ class DataSchema(BaseModel):
   id: int
   name: str
   volume: int
-  is_encrypted: bool
-  user_id: str
-  is_directory: bool
-  parent_id: Optional['DataSchema']
-  created_at: datetime
+  isEncrypted: bool
+  userID: str
+  isDirectory: bool
+  parentID: Optional['DataSchema']
+  createdAt: datetime
   
   class Config:
     from_attributes = True
   
 class ShareSchema(BaseModel):
-  src_id: str
-  dest_id: Optional[str]
-  data_id: int
-  duration: datetime
+  dataID: int
+  receivedID: Optional[str]
+  expiredTime: datetime
   
   class Config:
     from_attributes = True
 
 # DB Operations
+# User
 class UserSchemaAdd(BaseModel):
   email: str
   phonenum: str
@@ -50,8 +51,25 @@ class UserSchemaUpdate(BaseModel):
   username: Optional[str]
   password: Optional[str]
   profilePath: Optional[str]
-  last_used: Optional[datetime]
+  lastUsed: Optional[datetime]
   
   class Config:
     from_attributes = True
-  
+
+# Data
+class DataSchemaAdd(BaseModel):
+  name: str
+  resourceKey: Optional[str]
+  isEncrypted: bool
+  isDirectory: bool
+  validationToken: Optional[str]
+
+class DataSchemaGet(BaseModel):
+  id: Optional[int]
+  name: Optional[str]
+  isEncrypted: Optional[bool]
+  userID: str
+  isDirectory: Optional[bool]
+  parentID: Optional['DataSchema']
+  createdAt: Optional[datetime]
+
