@@ -1,12 +1,13 @@
 import fitz  # PyMuPDF
 
-def pdf2ImageList(pdfPath):
+def pdf2ImageList(pdfPath, offset=0, limit=1e9):
   lImages = []
   
   # Using PyMuPDF to open the PDF
   pdfDocument = fitz.open(pdfPath)
-  
-  for i in range(len(pdfDocument)):
+  pdfLast = min(offset+limit, pdfDocument.page_count)
+    
+  for i in range(offset, pdfLast):
     # Get the page
     page = pdfDocument.load_page(i)
     
