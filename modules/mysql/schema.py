@@ -36,6 +36,14 @@ class ShareSchema(BaseModel):
   
   class Config:
     from_attributes = True
+    
+class ExtensionSchema(BaseModel):
+  extension: str
+  extensionType: Optional[str]
+  note: Optional[str]
+  
+  class Config:
+    from_attributes = True
 
 # DB Operations
 # User

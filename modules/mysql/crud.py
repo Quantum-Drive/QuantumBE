@@ -5,10 +5,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from modules.common import fileUtils
 
-from .model import User, Data, share
+from .model import User, Data, Share, Extension
 from .schema import UserSchema, DataSchema, ShareSchema
 from .schema import UserSchemaAdd, UserSchemaUpdate
 from .schema import DataSchemaAdd, DataSchemaGet
+
+from .schema import ExtensionSchema
 
 # User CRUD
 def dbRegisterUser(db: Session, user: UserSchemaAdd):
@@ -100,3 +102,19 @@ def dbDeleteData(db: Session, objID: int):
   except SQLAlchemyError:
     db.rollback()
     return False
+
+# Share CRUD
+
+# Extension CRUD
+def dbAddExtension(db: Session, extensionSchema: ExtensionSchema):
+  dbItem = Extension(extension=extensionSchema.extension, 
+                     extensionType=extensionSchema.extensionType, 
+                     note=extensionSchema.note)
+  db.add(dbItem)
+  db.commit()
+  db.refresh(dbItem)
+  return dbItem
+
+def dbSearchExtension(db: Session, extension: str):
+  dbItem = db.query(Extension).filter(Extension.extension == extension).first()
+  return dbItem

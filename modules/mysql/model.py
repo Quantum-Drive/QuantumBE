@@ -34,7 +34,7 @@ class Data(Base):
     Index('idx_username_email', "userID", "name"),
   )
 
-class share(Base):
+class Share(Base):
   __tablename__ = 'shares'
   
   dataID = Column(Integer, ForeignKey('data.id', ondelete='CASCADE'), primary_key=True)
@@ -43,7 +43,14 @@ class share(Base):
   
   data = relationship('Data', foreign_keys=[dataID])
   user = relationship('User', foreign_keys=[receivedID])
+
+class Extension(Base):
+  __tablename__ = 'extensions'
   
+  extension = Column(String, primary_key=True, index=True)
+  extensionType = Column(String)
+  note = Column(String)
+
 # View
 class UserView(Base):
   __tablename__ = 'userView'
