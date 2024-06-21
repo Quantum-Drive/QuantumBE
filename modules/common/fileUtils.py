@@ -16,6 +16,16 @@ def pathSplit(sPath="/"):
   
   return lPath
 
+def extExtract(sFileName: str):
+  if not sFileName:
+    return None
+  
+  lFileName = sFileName.split(".")
+  if len(lFileName) == 1:
+    return None
+  
+  return lFileName[-1]
+
 def isAvailablePath(sPath="/"):
   if not sPath:
     return False, "Invalid path"
