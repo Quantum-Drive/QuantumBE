@@ -6,12 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, 
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from modules.common.fileUtils import *
-from modules.common.dbUtils import *
+from modules.common import *
 
 from modules.mysql.model import User, Data
-from modules.mysql.schema import DataSchemaAdd, DataSchemaGet
-from modules.mysql.crud import dbGetUser, dbAddData, dbAddData, dbGetData, dbUpdateData
+from modules.mysql.schema import DataSchemaAdd, DataSchemaGet, DataSchema
+from modules.mysql.crud import dbGetUser, dbAddData, dbAddData, dbSearchData, dbGetData, dbUpdateData, dbSearchExtension
 from modules.mysql.database import getMySQLDB
 
 from modules.sqlite.model import DataCache
@@ -26,14 +25,14 @@ def getPathID(db: Session, sPath: str, user: User):
     return None
   
   previousID = None
-  lPath = pathSplit(sPath)
+  lPath = fileUtils.pathSplit(sPath)
   for dir in lPath:
-    data = dbGetData(db, Data(userID=user.email, isDirectory=True, name=dir, parentID=previousID))
+    data = dbSearchData(db, Data(userID=user.email, isDirectory=True, name=dir, parentID=previousID))
     
     if not data:
       raise HTTPException(status_code=404, detail="Path not found")
     
-    previousID = data.id
+    previousID = data[0].id
   
   return previousID
 
@@ -59,28 +58,49 @@ async def fileInfoGet(resourcekey: str = Query(None),
     sPath = base64.b64decode(resourcekey).decode('utf-8')
   else:
     sPath = "/"
-  flag, msg = isAvailablePath(sPath)
+  flag, msg = fileUtils.isAvailablePath(sPath)
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
   
   parentID = getPathID(db, sPath, user)
   
-  data = dbGetData(db, 
-                     DataSchemaGet(id=id, name=name, isEncrypted=isEncrypted, userID=user.email, 
+  data = dbSearchData(db, 
+                     Data(id=id, name=name, isEncrypted=isEncrypted, userID=user.email, 
                                    isDirectory=isDirectory, parentID=parentID), 
-                     filterParentID=True, takeAll=True)
+                     filterParentID=True)
   if not data:
     raise HTTPException(status_code=404, detail="Data not found")
 
+  # return data
   return data
 
-ex = """{
-  "name":"string",
-  "resourceKey":"string",
-  "isEncrypted":true,
-  "isDirectory":true,
-  "validationToken":"string"
-}"""
+@router.get("/{contentID}/detail")
+async def fileDetailGet(contentID: int,
+                        offset: int = Query(0),
+                        limit: int = Query(None),
+                        user: User = Depends(loginManager),
+                        db: Session = Depends(getMySQLDB)):
+  data: Data = dbGetData(db, Data(id=contentID, userID=user.email))
+  if not data:
+    raise HTTPException(status_code=404, detail="Data not found")
+  
+  extension = fileUtils.extExtract(data.name)
+  try:
+    extensionData = dbSearchExtension(db, extension)
+    
+    data.extensionType = extensionData.extensionType
+    if extensionData.extensionType == "pdf":
+      if not limit:
+        data.content, data.next = pdfExtracter.pdf2ImageList(data.content, offset)
+      else:
+        data.content, data.next = pdfExtracter.pdf2ImageList(data.content, offset, limit)
+      
+    elif extensionData.extensionType == "image":
+      data.content = content
+  except (AttributeError, IndexError, ValueError):
+    data.extensionType = None 
+  
+  return data
 
 # @router.post("/upload")
 # async def fileUpload(filedata: object = Form(examples=[schema2json(DataSchemaAdd)]),
@@ -118,7 +138,7 @@ ex = """{
 #       raise HTTPException(status_code=400, detail=msg)
 
 #     parentID = getPathID(db, filePath, user)
-#     data = dbGetData(db, Data(name=filedata.name, userID=user.email, parentID=parentID,), takeAll=True)
+#     data = dbSearchData(db, Data(name=filedata.name, userID=user.email, parentID=parentID,))
 #     if data:
 #       raise HTTPException(status_code=400, detail="File(same name) already exists")
     
@@ -160,21 +180,21 @@ async def fileCache(filedata: DataSchemaAdd,
   else:
     filePath = "/"
 
-  flag, msg = isAvailablePath(filePath)
+  flag, msg = fileUtils.isAvailablePath(filePath)
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
   
-  flag, msg = isAvailableName(filedata.name)
+  flag, msg = fileUtils.isAvailableName(filedata.name)
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
 
   parentID = getPathID(mysqlDB, filePath, user)
-  data = dbGetData(mysqlDB, Data(name=filedata.name, userID=user.email, parentID=parentID,), takeAll=True)
+  data = dbSearchData(mysqlDB, Data(name=filedata.name, userID=user.email, parentID=parentID,))
   if data:
     raise HTTPException(status_code=400, detail="File(same name) already exists")
   
   if filedata.isDirectory:
-    flag, msg = makeDir(userHash, BASE_PATH, filePath, filedata.name)
+    flag, msg = fileUtils.makeDir(userHash, BASE_PATH, filePath, filedata.name)
     if not flag:
       raise HTTPException(status_code=400, detail=msg)
     data = dbAddData(mysqlDB, filedata, user.email, 0, parentID)
@@ -209,11 +229,11 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   
   try:
     parentID = getPathID(mysqlDB, cache.filePath, user)
-    data = dbGetData(mysqlDB, Data(name=cache.fileName, userID=user.email, parentID=parentID), takeAll=True)
+    data = dbSearchData(mysqlDB, Data(name=cache.fileName, userID=user.email, parentID=parentID))
     if data:
       raise HTTPException(status_code=400, detail="File(same name) already exists")
     
-    flag, msg = makeFile(userHash, BASE_PATH, cache.filePath, cache.fileName, content)    
+    flag, msg = fileUtils.makeFile(userHash, BASE_PATH, cache.filePath, cache.fileName, content)    
   except Exception as e:
     raise e
   
@@ -226,7 +246,7 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
     raise HTTPException(status_code=400, detail="Failed to insert data")
   dbDeleteCache(cacheDB, userHash)
   
-  lFilePath = pathSplit(cache.filePath)
+  lFilePath = fileUtils.pathSplit(cache.filePath)
   for i in range(len(lFilePath)-1, -1, -1):
     id = getPathID(mysqlDB, "/"+"/".join(lFilePath[:i+1]), user)
     data = dbGetData(mysqlDB, Data(id=id, userID=user.email))
