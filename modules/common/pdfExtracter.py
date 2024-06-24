@@ -20,7 +20,7 @@ def pdf2ImageList(pdfPath, offset=0, limit=1e9):
     # Append image bytes to list
     lImages.append(bImage)
   
-  return lImages
+  return lImages, -1 if i >= pdfDocument.page_count else i
 
 if __name__=="__main__":
   pdf_path = "../../trash.pdf"
