@@ -53,10 +53,8 @@ def dbAddData(db: Session, data: DataSchemaAdd, userID: str, volume: int = None,
   db.refresh(dbItem)
   return dbItem
 
-def dbGetData(db: Session, data: DataSchemaGet, filterParentID: bool = False, takeAll: bool = False):
+def dbSearchData(db: Session, data: DataSchemaGet, filterParentID: bool = False):
   dbItem = db.query(Data).filter(Data.userID == data.userID)
-  if data.id is not None:
-    dbItem = dbItem.filter(Data.id == data.id)
   if data.name:
     dbItem = dbItem.filter(Data.name == data.name)
   if data.isEncrypted is not None:
@@ -66,10 +64,11 @@ def dbGetData(db: Session, data: DataSchemaGet, filterParentID: bool = False, ta
   if filterParentID:
     dbItem = dbItem.filter(Data.parentID == data.parentID)
   
-  if takeAll:
-    return dbItem.all()
-  else:
-    return dbItem.first()
+  return dbItem.all()
+
+def dbGetData(db: Session, data: DataSchemaGet):
+  dbItem = db.query(Data).filter(Data.id == data.id, Data.userID == data.userID).first()
+  return dbItem
 
 def dbUpdateData(db: Session, data: DataSchema, objID: int):
   dbItem = db.query(Data).filter(Data.id == objID).first()
