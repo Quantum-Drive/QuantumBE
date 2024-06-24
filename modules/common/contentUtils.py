@@ -5,7 +5,7 @@ from PIL import Image
 from moviepy.editor import VideoFileClip
 import fitz  # PyMuPDF
 
-def createThumbnail(imagePath, thumbnailSize=(128, 128), quality=85, format='JPEG'):
+def makeThumbnail(imagePath, thumbnailSize=(128, 128), quality=85, format='JPEG'):
   with Image.open(imagePath) as img:
     img.thumbnail(thumbnailSize)
     
@@ -21,14 +21,14 @@ def createThumbnail(imagePath, thumbnailSize=(128, 128), quality=85, format='JPE
     dataURL = f"data:image/{format.lower()};base64,{imgStr}"
     return dataURL
 
-def createVideoImg(videoPath, time=1.0):
+def makeVideoImg(videoPath, time=1.0):
   with VideoFileClip(videoPath) as clip:
     frame = clip.get_frame(time)
     img = Image.fromarray(frame)
     
     return img
 
-def createDataURL(filePath: str, format: str):
+def makeDataURL(filePath: str, format: str):
   with Image.open(filePath) as f:
     buffered = io.BytesIO()
     f.save(buffered, format=format)
