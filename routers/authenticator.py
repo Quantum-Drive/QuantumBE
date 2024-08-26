@@ -1,4 +1,5 @@
 import hashlib
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -8,7 +9,7 @@ from fastapi_login.exceptions import InvalidCredentialsException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from modules.common.fileUtils import makeDir, deleteDir
+from modules.common.fileUtils import makeDir, delete
 
 from modules.mysql.model import User, Data
 from modules.mysql.schema import UserSchema, UserSchemaAdd
@@ -16,9 +17,9 @@ from modules.mysql.crud import dbRegisterUser, dbDeleteUser
 from modules.mysql.crud import dbGetData, dbDeleteData
 from modules.mysql.database import getMySQLDB
 
-from .dependencies import loginManager, getUser, BASE_PATH
+from .dependencies import loginManager, getUser, BASE_PATH, USER_ROOT_PATH, TRASH_PATH
 
-router = APIRouter(prefix="/auth")
+router = APIRouter(prefix="/auth", tags=["Authenticator"])
 
 @router.post("/signup")
 async def signup(Response: JSONResponse,
@@ -33,10 +34,19 @@ async def signup(Response: JSONResponse,
     flag, msg = makeDir(userHash, BASE_PATH, "/", "/")
     if not flag:
       raise HTTPException(status_code=400, detail=msg)
+
+    flag, msg = makeDir(userHash, BASE_PATH, "/", USER_ROOT_PATH)
+    if not flag:
+      raise HTTPException(status_code=400, detail=msg)
+    
+    flag, msg = makeDir(userHash, BASE_PATH, "/", TRASH_PATH)
+    if not flag:
+      raise HTTPException(status_code=400, detail=msg)
+    
     response = JSONResponse({"message": "User created successfully"}, status_code=201)
     token = loginManager.create_access_token(data={'sub':user.email},
                                              scopes=['read:protected', 'write:protected'])
-    loginManager.set_cookie(response, token)
+    response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
     return response
   return HTTPException(status_code=400, detail="User creation failed")
 
@@ -53,10 +63,14 @@ async def login(formData: OAuth2PasswordRequestForm = Depends()):
     
     # 로그인 세션 생성
     # response = RedirectResponse(url="/protected", status_code=302)
-    response = JSONResponse({"message": "Login successfully"}, status_code=200)
     token = loginManager.create_access_token(data={'sub':user.email},
                                              scopes=['read:protected', 'write:protected'])
-    loginManager.set_cookie(response, token)
+    refreshToken = loginManager.create_access_token(data={'sub':user.email},
+                                                    expires=timedelta(days=7))
+    # response = JSONResponse({"access_token": token, "refresh_token": refreshToken, "token_type":"bearer"}, status_code=200)
+    response = JSONResponse({"message": "Login successful"}, status_code=200)
+    # loginManager.set_cookie(response, token)
+    response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
     return response
   else:
     raise HTTPException(status_code=400, detail="Invalid grant type")
@@ -77,7 +91,7 @@ def reset_password():
 
 @router.delete("/logout")
 def logout(user: User = Depends(loginManager)):
-  response = JSONResponse({"message": "Logout successfully"}, status_code=200)
+  response = Response(status_code=204)
   response.delete_cookie("access-token")
   return response
 
@@ -94,7 +108,7 @@ async def withdraw(user: User = Depends(loginManager),
   
   # user file dir delete part
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  flag, msg = deleteDir(userHash, BASE_PATH, "/", "/")
+  flag, msg = delete(userHash, BASE_PATH, "/", "/")
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
   
