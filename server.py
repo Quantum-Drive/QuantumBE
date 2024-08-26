@@ -1,24 +1,33 @@
 import pytz
+import jwt
+from datetime import datetime, timedelta
+from dateutil.parser import parse
 
-import fastapi
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi_login.exceptions import InvalidCredentialsException
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from periodicTasks import sqliteJobs
 
-from routers import authenticator
-from routers import fileManager
-from routers.dependencies import loginManager, SECRET, verifyToken
+from routers import authenticator, profile, file, trashbin
+from routers.dependencies import loginManager, SECRET
+
+origins = [
+  "https://localhost:5300",
+  "https://localhost:3000",
+  "https://quantumdrive.vercel.app"
+]
 
 app = FastAPI()
 
-# app.add_middleware(SessionMiddleware, secret_key=SECRET)
 app.include_router(authenticator.router)
-app.include_router(fileManager.router, dependencies=[Depends(loginManager)])
+app.include_router(profile.router, dependencies=[Depends(loginManager)])
+app.include_router(file.router, dependencies=[Depends(loginManager)])
+app.include_router(trashbin.router, dependencies=[Depends(loginManager)])
 
 # @app.exception_handler(NotAuthenticatedException)
 # def authExceptionHandler(request: Request, exc: NotAuthenticatedException):
@@ -37,11 +46,49 @@ async def startup_event():
 async def shutdown_event():
   scheduler.shutdown()
 
+@app.middleware("https")
+@app.middleware("http")
+async def refreshSession(request: Request, call_next):
+  # if request.headers and request.headers.get("Authorization"):
+  if request.cookies and request.cookies.get("access-token"):
+    token = request.cookies.get("access-token")
+    #token = request.headers.get("Authorization")
+    
+    # token = token.split(" ")[1]
+    # userID = loginManager._get_payload(token)
+    try:
+      tokenData = jwt.decode(token, SECRET, algorithms=["HS256"])
+      data = {}
+      for key, value in tokenData.items():
+        if key != "exp" and key != "scopes":
+          data[key] = value
+      
+      accessToken = loginManager.create_access_token(data=data, scopes=tokenData["scopes"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
+      del(request.cookies["access-token"])
+      accessToken = ""
+    
+    response: Response = await call_next(request)
+    if response.headers.get("Set-Cookie") and 'access-token="";' in response.headers.get("Set-Cookie"):
+      pass
+    elif accessToken:
+      response.set_cookie(key="access-token", value=accessToken, httponly=True, secure=True, samesite="None")
+    else:
+      response.delete_cookie("access-token")
+    return response
+  else:
+    return await call_next(request)
 
+app.add_middleware(CORSMiddleware,
+                    allow_origins=origins,
+                    allow_credentials=True,
+                    allow_methods=["*"],
+                    allow_headers=["*"],
+                    )
 
 @app.get("/token")
-async def getToken(token: str = Depends(loginManager)):
-  return {"token": token}
+async def getToken(request: Request):
+  return {"token": await loginManager._get_token(request)}
 
 # 보호된 엔드포인트
 @app.get("/protected")
@@ -50,6 +97,7 @@ async def protected(token: str = Depends(loginManager)):
 
 if __name__ == "__main__":
   import uvicorn
-  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True)
+  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True,
+              ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
   
   
