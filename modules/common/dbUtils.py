@@ -1,8 +1,10 @@
 import json
+import copy
 from pydantic import BaseModel
+from collections.abc import Iterable
 
 def schema2json(schema: BaseModel):
-  exampleJSON = {}
+  obj = {}
     
   # Iterate through properties
   schema = schema.model_json_schema()
@@ -19,12 +21,41 @@ def schema2json(schema: BaseModel):
       propertyType = details.get('type', 'unknown_type')
 
     if propertyType == 'string':
-      exampleJSON[prop] = 'string'
+      obj[prop] = 'string'
     elif propertyType == 'integer':
-      exampleJSON[prop] = 0
+      obj[prop] = 0
     elif propertyType == 'boolean':
-      exampleJSON[prop] = True
+      obj[prop] = True
     else:
-      exampleJSON[prop] = None
+      obj[prop] = None
   
-  return json.dumps(exampleJSON, separators=(',\n', ':'))
+  return json.dumps(obj, separators=(',\n', ':'))
+
+# def model2dict(obj: object):
+#   converted = copy.deepcopy(obj.__dict__)
+#   try:
+#     del(converted['_sa_instance_state'])
+#   except KeyError:
+#     return None
+#   return converted
+
+def model2dict(data: object):
+  tmp = []
+  flag = False
+  if not isinstance(data, Iterable):
+    data = [data, ]
+    flag = True
+  
+  for row in data:
+    fields = {}
+    if not isinstance(row, Iterable):
+      row = (row, )
+    for obj in row:
+      for column in obj.__table__.columns:
+        fields[column.name] = getattr(obj, column.name)
+    
+    if flag:
+      return fields
+    
+    tmp.append(fields)
+  return tmp
