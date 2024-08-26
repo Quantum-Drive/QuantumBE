@@ -27,8 +27,12 @@ class Data(Base):
   isDirectory = Column(Boolean)
   parentID = Column(Integer, ForeignKey('data.id', ondelete='CASCADE'), nullable=True)
   createdAt = Column(DateTime)
+  extension = Column(String, ForeignKey('extensions.extension', ondelete='SET NULL'), nullable=True)
+  isFavorite = Column(Boolean)
   
   user = relationship('User', foreign_keys=[userID])
+  extensions = relationship('Extension', foreign_keys=[extension], back_populates='data')
+  shares = relationship('Share', back_populates='data')
   
   __table_args__ = (
     Index('idx_username_email', "userID", "name"),
@@ -41,16 +45,36 @@ class Share(Base):
   receivedID = Column(String, ForeignKey('users.email', ondelete='CASCADE'), primary_key=True, index=True)
   expiredTime = Column(DateTime)
   
-  data = relationship('Data', foreign_keys=[dataID])
+  data = relationship('Data', foreign_keys=[dataID], back_populates='shares')
   user = relationship('User', foreign_keys=[receivedID])
 
 class Extension(Base):
   __tablename__ = 'extensions'
   
   extension = Column(String, primary_key=True, index=True)
-  extensionType = Column(String)
+  description = Column(String)
   note = Column(String)
+  
+  data = relationship('Data', back_populates='extensions')
 
+class Trash(Base):
+  __tablename__ = 'trashbin'
+  
+  
+  id = Column(Integer, primary_key=True, index=True)
+  name = Column(String)
+  volume = Column(Integer)
+  isEncrypted = Column(Boolean)
+  userID = Column(String, ForeignKey('users.email', ondelete='CASCADE'))
+  isDirectory = Column(Boolean)
+  createdAt = Column(DateTime)
+  
+  user = relationship('User', foreign_keys=[userID])
+  
+  __table_args__ = (
+    Index('idx_username_email', "userID", "name"),
+  )
+  
 # View
 class UserView(Base):
   __tablename__ = 'userView'

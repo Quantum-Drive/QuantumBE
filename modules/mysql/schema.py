@@ -1,4 +1,3 @@
-from fastapi import UploadFile, File, Query
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -25,6 +24,7 @@ class DataSchema(BaseModel):
   isDirectory: bool
   parentID: Optional['DataSchema']
   createdAt: datetime
+  extension: Optional[str]
   
   class Config:
     from_attributes = True
@@ -39,7 +39,7 @@ class ShareSchema(BaseModel):
     
 class ExtensionSchema(BaseModel):
   extension: str
-  extensionType: Optional[str]
+  description: Optional[str]
   note: Optional[str]
   
   class Config:
@@ -58,7 +58,7 @@ class UserSchemaUpdate(BaseModel):
   phonenum: Optional[str]
   username: Optional[str]
   password: Optional[str]
-  profilePath: Optional[str]
+  profileImg: Optional[str]
   lastUsed: Optional[datetime]
   
   class Config:
@@ -78,6 +78,29 @@ class DataSchemaGet(BaseModel):
   isEncrypted: Optional[bool]
   userID: str
   isDirectory: Optional[bool]
-  parentID: Optional['DataSchema']
-  createdAt: Optional[datetime]
+  parentID: Optional[int]
+  extension: Optional[str]
+  isFavorite: Optional[bool]
+
+class DataSchemaUpdate(BaseModel):
+  name: Optional[str]
+  parentID: Optional[int]
+  
+  class Config:
+    from_attributes = True
+
+# Share
+
+# Trashbin
+class TrashSchema(BaseModel):
+  id: int
+  name: str
+  volume: int
+  isEncrypted: bool
+  userID: str
+  isDirectory: bool
+  createdAt: datetime
+  
+  class Config:
+    from_attributes = True
 
