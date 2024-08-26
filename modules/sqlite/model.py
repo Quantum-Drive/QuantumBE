@@ -9,7 +9,7 @@ class DataCache(Base):
   __tablename__ = 'dataCache'
   
   userHash = Column(String, primary_key=True, index=True)
-  filePath = Column(String)
+  parentID = Column(Integer)
   fileName = Column(String)
   isEncrypted = Column(Boolean)
   validationToken = Column(String)

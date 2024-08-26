@@ -6,7 +6,7 @@ from datetime import datetime
 # DB Models
 class DataCacheSchema(BaseModel):
   userHash: str
-  filePath: str
+  parentID: Optional[int]
   fileName: str
   isEncrypted: bool
   validationToken: Optional[str]

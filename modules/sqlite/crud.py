@@ -10,7 +10,7 @@ from .schema import DataCacheSchema
 def dbCreateCache(db: Session, dataCache: DataCacheSchema):
   dbItem = db.query(DataCache).filter(DataCache.userHash == dataCache.userHash).first()
   if dbItem:
-    dbItem.filePath = dataCache.filePath
+    dbItem.parentID = dataCache.parentID
     dbItem.fileName = dataCache.fileName
     dbItem.isEncrypted = dataCache.isEncrypted
     dbItem.validationToken = dataCache.validationToken
@@ -20,7 +20,7 @@ def dbCreateCache(db: Session, dataCache: DataCacheSchema):
     return dbItem
 
   dbItem = DataCache(userHash=dataCache.userHash,
-                     filePath = dataCache.filePath,
+                     parentID = dataCache.parentID,
                      fileName = dataCache.fileName,
                      isEncrypted=dataCache.isEncrypted,
                      validationToken=dataCache.validationToken,
