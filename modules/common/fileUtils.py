@@ -1,5 +1,6 @@
 import os
 import re
+import pickle
 import hashlib
 import shutil
 
@@ -25,6 +26,22 @@ def extExtract(sFileName: str):
     return None
   
   return lFileName[-1]
+
+def makePickle(sPath: str, obj):
+  try:
+    with open(sPath, "wb") as f:
+      pickle.dump(obj, f)
+    return True, "Saved successfully"
+  except Exception as e:
+    return False, f"Failed to save the object: {e}, {sPath}"
+
+def loadPickle(sPath: str):
+  try:
+    with open(sPath, "rb") as f:
+      obj = pickle.load(f)
+    return obj
+  except Exception as e:
+    return None
 
 def isAvailablePath(sPath="/"):
   if not sPath:
@@ -69,54 +86,67 @@ def isAvailableName(sFileName: str):
   
   return True, "Valid file name"
 
-def makeDir(userHash: str, basePath: str, filePath: str, dirName: str = "/"):
-  if not filePath:
+def makeDir(sFilePath: str):
+  if not sFilePath:
     return False, "Invalid path"
-  
-  if os.path.exists(f"{basePath}/{userHash}{filePath}/{dirName}"):
+  if os.path.exists(sFilePath):
     return False, "Directory already exists"
   
-  os.makedirs(f"{basePath}/{userHash}{filePath}/{dirName}")
+  os.makedirs(sFilePath)
+  print(sFilePath)
   return True, "Directory created successfully"
 
-def makeFile(userHash: str, basePath: str, filePath: str, fileName: str, content: bytes):
-  if not filePath or not fileName:
-    return False, "Invalid path or file name"
+def makeFile(sFilePath:str, content: bytes):
+  if not sFilePath:
+    return False, "Invalid path"
   
-  if os.path.exists(f"{basePath}/{userHash}{filePath}/{fileName}"):
+  if os.path.exists(sFilePath):
     return False, "File already exists"
   
-  with open(f"{basePath}/{userHash}{filePath}/{fileName}", "wb") as file:
+  with open(sFilePath, "wb") as file:
     file.write(content)
   return True, "File saved successfully"
 
-def deleteDir(userHash: str, basePath: str, filePath: str, dirName: str = "/"):
-  if not filePath:
-    return False, "Invalid path"
-  
-  if not os.path.exists(f"{basePath}/{userHash}{filePath}/{dirName}"):
-    return False, "Directory does not exist"
-  
-  try:
-    shutil.rmtree(f"{basePath}/{userHash}{filePath}/{dirName}")
-  except Exception as e:
-    return False, f"Failed to delete directory: {e}"
-  return True, "Directory deleted successfully"
-
-def deleteFile(userHash: str, basePath: str, filePath: str, fileName: str):
-  if not filePath or not fileName:
+def moveFile(userHash: str, basePath: str, srcPath: str, srcName: str, destPath: str = None, destName: str = None):
+  if not srcPath or not srcName:
     return False, "Invalid path or file name"
   
-  if not os.path.exists(f"{basePath}/{userHash}{filePath}/{fileName}"):
+  if not os.path.exists(f"{basePath}/{userHash}{srcPath}/{srcName}"):
     return False, "File does not exist"
   
-  os.remove(f"{basePath}/{userHash}{filePath}/{fileName}")
-  return True, "File deleted successfully"
+  if not destPath and not destName:
+    return False, "Both destination path and file name are not provided"
+  
+  if not destPath:
+    destPath = srcPath
+  if not destName:
+    destName = srcName
 
-if __name__ == "__main__":
-  flag, msg = makeDir(hashlib.sha256("juhy0987@naver.com".encode('utf-8')).hexdigest(),
-            "/data/quantumDrive/files",
-            "/", "/")
-  print(msg)
+  if not os.path.exists(f"{basePath}/{userHash}{destPath}"):
+    return False, "Destination path does not exist"
+  
+  if os.path.exists(f"{basePath}/{userHash}{destPath}/{destName}"):
+    return False, "File already exists in destination"
+
+  os.rename(f"{basePath}/{userHash}{srcPath}/{srcName}", f"{basePath}/{userHash}{destPath}/{destName}")
+  return True, "File moved successfully"
+
+def delete(sPath: str):
+  if not sPath:
+    return False, "Invalid path"
+  
+  if not os.path.exists(sPath):
+    return False, f"Object does not exist {sPath}"
+  
+  try:
+    try:
+      os.remove(sPath)
+    except IsADirectoryError:
+      shutil.rmtree(sPath)
+  except Exception as e:    
+    return False, f"Failed to delete the object {e}"
+  return True, "Object deleted successfully"
+
+
   
   
