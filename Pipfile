@@ -4,6 +4,32 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+annotated-types = "*"
+APScheduler = "*"
+click = "*"
+exceptiongroup = "*"
+fastapi = "*"
+fastapi-login = "*"
+filelock = "*"
+greenlet = "*"
+h11 = "*"
+idna = "*"
+itsdangerous = "*"
+pillow = "*"
+pipenv = "*"
+platformdirs = "*"
+pydantic = "*"
+pydantic-core = "*"
+pytz = "*"
+six = "*"
+sniffio = "*"
+SQLAlchemy = "*"
+starlette = "*"
+typing_extensions = "*"
+tzlocal = "*"
+uvicorn = "*"
+virtualenv = "*"
+virtualenv-clone = "*"
 
 [dev-packages]
 
