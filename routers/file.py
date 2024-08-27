@@ -42,15 +42,15 @@ def addThumbnail(db: Session, item: dict, user: User):
       userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
       match (description):
         case "pdf":
-          target = contentUtils.pdf2ImageList(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"])[1:]), offset=0, limit=1)[0]
+          target = contentUtils.pdf2ImageList(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"])), offset=0, limit=1)[0]
         case "video":
-          target = contentUtils.img2DataURL(contentUtils.clipVideo(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"])[1:])), "jpeg")
+          target = contentUtils.img2DataURL(contentUtils.clipVideo(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"]))), "jpeg")
         case "audio":
           target = None
         case "document":
           target = None
         case "image":
-          target = contentUtils.img2DataURL(contentUtils.loadImg(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"])[1:])), item["extension"])
+          target = contentUtils.img2DataURL(contentUtils.loadImg(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"]))), item["extension"])
     case _:
       pass
   item["thumbnail"] = target
@@ -127,7 +127,7 @@ async def fileInfoGet(resourcekey: str = Query(None),
   data = data[:limit] if limit and len(data) > limit else data
   
   for item in data:
-    item["resourcekey"] = base64.b64encode(getPath(db, user, objID=item["parentID"]).encode('utf-8')).decode()
+    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
     item = addThumbnail(db, item, user)
   
@@ -139,8 +139,6 @@ async def fileCache(filedata: DataSchemaAdd,
                     user: User = Depends(loginManager),
                     cacheDB: Session = Depends(getSQLiteDB),
                     mysqlDB: Session = Depends(getMySQLDB)):
-  
-
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   if filedata.resourceKey:
     filePath = base64.b64decode(filedata.resourceKey).decode('utf-8')
@@ -149,7 +147,6 @@ async def fileCache(filedata: DataSchemaAdd,
   
   if not filePath or filePath[0] != "/":
     filePath = "/" + filePath
-
   flag, msg = fileUtils.isAvailablePath(filePath)
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
@@ -216,7 +213,7 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   ########################################
   # modify later
   ########################################
-  flag, msg = fileUtils.makeFile(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(mysqlDB, user, objID=data.parentID)[1:], data.name), content)    
+  flag, msg = fileUtils.makeFile(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(mysqlDB, user, objID=data.parentID), data.name), content)    
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
   parentID = cache.parentID
@@ -264,7 +261,7 @@ def fileSearch(keyword: str = Query(...),
   data = data[:limit] if limit and len(data) > limit else data
   
   for item in data:
-    item["resourcekey"] = base64.b64encode(getPath(db, user, objID=item["id"]).encode('utf-8')).decode()
+    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user, objID=item["parentID"]).encode('utf-8'))).decode()
     del(item["parentID"])
     item = addThumbnail(db, item, user)
   
@@ -303,7 +300,7 @@ def fileDelete(contentID: int,
     raise HTTPException(status_code=404, detail="Data not found")
   
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  sPath = getPath(db, user, objID=data.parentID)[1:]
+  sPath = getPath(db, user, objID=data.parentID)
   metaData = dict()
   metaData['path'] = sPath
   treeRoot = dbExtractDataTree(db, user.email, data.id, metaData)
@@ -350,7 +347,7 @@ async def fileDetailGet(contentID: int,
     
     data.description = extensionData.description
     
-    sPath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, objID=data.id)[1:])
+    sPath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, objID=data.id))
     match (extensionData.description):
       case "document":
         if data.extension == "pdf":

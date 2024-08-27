@@ -155,7 +155,7 @@ def dbDeleteData(db: Session, objID: int):
     return False
 
 def getPath(db: Session, user: User, objID: int = None):
-  return "/" + "/".join([data.name for data in dbGetPath(db, user.email, objID=objID)]) if objID is not None else ""
+  return "/".join([data.name for data in dbGetPath(db, user.email, objID=objID)]) if objID is not None else ""
 
 def dbGetPath(db: Session, userID: str, objID: int = None, sPath: str = None, ):
   lPath = []
