@@ -1,95 +1,46 @@
-name: QuantumDrive
-channels:
-  - defaults
-dependencies:
-  - _libgcc_mutex=0.1=main
-  - _openmp_mutex=5.1=1_gnu
-  - annotated-types=0.6.0=py310h06a4308_0
-  - apscheduler=3.9.0=py310h06a4308_0
-  - bzip2=1.0.8=h5eee18b_6
-  - c-ares=1.19.1=h5eee18b_0
-  - ca-certificates=2024.7.2=h06a4308_0
-  - click=8.1.7=py310h06a4308_0
-  - exceptiongroup=1.2.0=py310h06a4308_0
-  - fastapi=0.103.0=py310h06a4308_0
-  - freetype=2.12.1=h4a9f257_0
-  - greenlet=3.0.1=py310h6a678d5_0
-  - h11=0.14.0=py310h06a4308_0
-  - icu=73.1=h6a678d5_0
-  - idna=3.7=py310h06a4308_0
-  - itsdangerous=2.2.0=py310h06a4308_0
-  - jpeg=9e=h5eee18b_1
-  - krb5=1.20.1=h143b758_1
-  - lcms2=2.12=h3be6417_0
-  - ld_impl_linux-64=2.38=h1181459_1
-  - lerc=3.0=h295c915_0
-  - libcurl=8.7.1=h251f7ec_0
-  - libdeflate=1.17=h5eee18b_1
-  - libedit=3.1.20230828=h5eee18b_0
-  - libev=4.33=h7f8727e_1
-  - libffi=3.4.4=h6a678d5_1
-  - libgcc-ng=11.2.0=h1234567_1
-  - libgomp=11.2.0=h1234567_1
-  - libnghttp2=1.57.0=h2d74bed_0
-  - libpng=1.6.39=h5eee18b_0
-  - libprotobuf=3.20.3=he621ea3_0
-  - libssh2=1.11.0=h251f7ec_0
-  - libstdcxx-ng=11.2.0=h1234567_1
-  - libtiff=4.5.1=h6a678d5_0
-  - libuuid=1.41.5=h5eee18b_0
-  - libwebp-base=1.3.2=h5eee18b_0
-  - lz4-c=1.9.4=h6a678d5_1
-  - ncurses=6.4=h6a678d5_0
-  - openjpeg=2.4.0=h3ad879b_0
-  - openssl=3.0.14=h5eee18b_0
-  - pillow=10.3.0=py310h5eee18b_0
-  - pip=24.0=py310h06a4308_0
-  - pydantic=2.5.3=py310h06a4308_0
-  - pydantic-core=2.14.6=py310hb02cf49_0
-  - python=3.10.11=h955ad1f_3
-  - pytz=2024.1=py310h06a4308_0
-  - readline=8.2=h5eee18b_0
-  - setuptools=69.5.1=py310h06a4308_0
-  - six=1.16.0=pyhd3eb1b0_1
-  - sniffio=1.3.0=py310h06a4308_0
-  - sqlalchemy=2.0.25=py310h5eee18b_0
-  - sqlite=3.45.3=h5eee18b_0
-  - starlette=0.27.0=py310h06a4308_0
-  - tk=8.6.14=h39e8969_0
-  - typing-extensions=4.11.0=py310h06a4308_0
-  - typing_extensions=4.11.0=py310h06a4308_0
-  - tzdata=2024a=h04d1e81_0
-  - tzlocal=5.2=py310h06a4308_0
-  - uvicorn=0.20.0=py310h06a4308_0
-  - wheel=0.43.0=py310h06a4308_0
-  - xz=5.4.6=h5eee18b_1
-  - zlib=1.2.13=h5eee18b_1
-  - zstd=1.5.5=hc292b87_2
-  - pip:
-      - anyio==3.7.1
-      - async-generator==1.10
-      - attrs==23.2.0
-      - certifi==2024.6.2
-      - charset-normalizer==3.3.2
-      - decorator==4.4.2
-      - fastapi-login==1.10.0
-      - imageio==2.34.1
-      - imageio-ffmpeg==0.5.1
-      - moviepy==1.0.3
-      - mysql==0.0.3
-      - mysql-connector-python==8.4.0
-      - mysqlclient==2.2.4
-      - numpy==2.0.0
-      - outcome==1.3.0.post0
-      - proglog==0.1.10
-      - pyjwt==2.8.0
-      - pymupdf==1.24.5
-      - pymupdfb==1.24.3
-      - python-dateutil==2.9.0.post0
-      - python-multipart==0.0.9
-      - requests==2.32.3
-      - sortedcontainers==2.4.0
-      - tqdm==4.66.4
-      - trio==0.21.0
-      - urllib3==2.2.2
-prefix: /opt/anaconda3/envs/QuantumDrive
+annotated-types @ file:///croot/annotated-types_1709542908624/work
+anyio==3.7.1
+APScheduler @ file:///croot/apscheduler_1668632958443/work
+async-generator==1.10
+attrs==23.2.0
+certifi==2024.6.2
+charset-normalizer==3.3.2
+click @ file:///croot/click_1698129812380/work
+decorator==4.4.2
+exceptiongroup @ file:///croot/exceptiongroup_1706031385326/work
+fastapi @ file:///croot/fastapi_1693295406697/work
+fastapi-login==1.10.0
+greenlet @ file:///croot/greenlet_1702059959679/work
+h11 @ file:///croot/h11_1706652277403/work
+idna @ file:///croot/idna_1714398848350/work
+imageio==2.34.1
+imageio-ffmpeg==0.5.1
+itsdangerous @ file:///croot/itsdangerous_1716533337253/work
+moviepy==1.0.3
+mysql==0.0.3
+mysql-connector-python==8.4.0
+mysqlclient==2.2.4
+numpy==2.0.0
+outcome==1.3.0.post0
+pillow @ file:///croot/pillow_1714398848491/work
+proglog==0.1.10
+pydantic @ file:///croot/pydantic_1709577974639/work
+pydantic_core @ file:///croot/pydantic-core_1709573961665/work
+PyJWT==2.8.0
+PyMuPDF==1.24.5
+PyMuPDFb==1.24.3
+python-dateutil==2.9.0.post0
+python-multipart==0.0.9
+pytz @ file:///croot/pytz_1713974312559/work
+requests==2.32.3
+six @ file:///tmp/build/80754af9/six_1644875935023/work
+sniffio @ file:///croot/sniffio_1705431295498/work
+sortedcontainers==2.4.0
+SQLAlchemy @ file:///croot/sqlalchemy_1705089115293/work
+starlette @ file:///croot/starlette-recipe_1692980413034/work
+tqdm==4.66.4
+trio==0.21.0
+typing_extensions @ file:///croot/typing_extensions_1715268824938/work
+tzlocal @ file:///croot/tzlocal_1715108795189/work
+urllib3==2.2.2
+uvicorn @ file:///croot/uvicorn-split_1678090074528/work
