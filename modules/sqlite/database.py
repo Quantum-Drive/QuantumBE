@@ -6,7 +6,8 @@ from config.quantumDriveDB import HOST, PORT, ID, PW, MIN, MAX
 from .model import Base
 
 # DATABASE_URL = f'sqlite:///:memory:'
-DATABASE_URL = f'sqlite:////data/app/sqlite/dataCache.db'
+# DATABASE_URL = f'sqlite:////data/app/sqlite/dataCache.db'
+DATABASE_URL = f'sqlite:///./dataCache.db'
 
 def initSQLiteDB():
   engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
