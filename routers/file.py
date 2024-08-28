@@ -261,7 +261,7 @@ def fileSearch(keyword: str = Query(...),
   data = data[:limit] if limit and len(data) > limit else data
   
   for item in data:
-    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user, objID=item["parentID"]).encode('utf-8'))).decode()
+    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
     item = addThumbnail(db, item, user)
   
