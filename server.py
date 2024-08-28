@@ -17,7 +17,7 @@ from routers import authenticator, profile, file, trashbin
 from routers.dependencies import loginManager, SECRET
 
 origins = [
-  "https://localhost:5300",
+  "http://localhost:5300",
   "https://localhost:3000",
   "https://quantumdrive.vercel.app"
 ]
@@ -46,7 +46,7 @@ async def startup_event():
 async def shutdown_event():
   scheduler.shutdown()
 
-@app.middleware("https")
+# @app.middleware("https")
 @app.middleware("http")
 async def refreshSession(request: Request, call_next):
   # if request.headers and request.headers.get("Authorization"):
@@ -73,6 +73,7 @@ async def refreshSession(request: Request, call_next):
       pass
     elif accessToken:
       response.set_cookie(key="access-token", value=accessToken, httponly=True, secure=True, samesite="None")
+      # response.set_cookie(key="access-token", value=accessToken)
     else:
       response.delete_cookie("access-token")
     return response
@@ -97,7 +98,7 @@ async def protected(token: str = Depends(loginManager)):
 
 if __name__ == "__main__":
   import uvicorn
-  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True,
-              ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
+  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True, )
+              # ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
   
   

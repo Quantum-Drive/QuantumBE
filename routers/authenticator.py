@@ -47,6 +47,7 @@ async def signup(Response: JSONResponse,
     token = loginManager.create_access_token(data={'sub':user.email},
                                              scopes=['read:protected', 'write:protected'])
     response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
+    # response.set_cookie(key="access-token", value=token, httponly=True)
     return response
   return HTTPException(status_code=400, detail="User creation failed")
 
@@ -71,6 +72,7 @@ async def login(formData: OAuth2PasswordRequestForm = Depends()):
     response = JSONResponse({"message": "Login successful"}, status_code=200)
     # loginManager.set_cookie(response, token)
     response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
+    # response.set_cookie(key="access-token", value=token, httponly=True)
     return response
   else:
     raise HTTPException(status_code=400, detail="Invalid grant type")
