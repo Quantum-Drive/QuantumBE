@@ -118,6 +118,7 @@ def clipVideo(videoIO, format="mp4", time: float = 1.0):
   frameNum = time * 3600
   
   numFrames = reader.get_length()
+  print(reader.get_length())
   if numFrames < frameNum:
     frameNum = 10
     
