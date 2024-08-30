@@ -98,7 +98,7 @@ async def protected(token: str = Depends(loginManager)):
 
 if __name__ == "__main__":
   import uvicorn
-  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True)
-              # ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
+  uvicorn.run("server:app", host="0.0.0.0", port=5300)
+              # reload=True, ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
   
   
