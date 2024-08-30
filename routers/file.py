@@ -51,7 +51,7 @@ async def getThumbnail(db: Session, user: User, fileID: int, file: bytes = None)
         case "image":
           image = Image.open(io.BytesIO(file))
         case "video":
-          image = fileUtils.clipVideo(io.BytesIO(file))
+          image = await fileUtils.clipVideo(io.BytesIO(file))
         case "audio":
           pass
         case "document":
