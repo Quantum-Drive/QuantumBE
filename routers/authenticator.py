@@ -12,8 +12,6 @@ from fastapi_login.exceptions import InvalidCredentialsException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from modules.common.fileUtils import makeDir, delete
-
 from modules.mysql.model import User, Data
 from modules.mysql.schema import UserSchema, UserSchemaAdd
 from modules.mysql.crud import dbRegisterUser, dbDeleteUser
