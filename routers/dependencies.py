@@ -9,13 +9,15 @@ from sqlalchemy.orm import Session
 from modules.mysql.database import SessionLocal
 from modules.mysql.model import User
 
+DS_HOST = "http://121.157.24.40:5299"
 BASE_PATH = "/data/quantumDrive/files"
+# BASE_PATH = "./files"
 USER_ROOT_PATH = "root"
 TRASH_PATH = "trash"
 TEMP_PATH = "temp"
 SECRET = "super-secret-key"
 loginManager = LoginManager(SECRET, token_url="/auth/login", 
-                            use_cookie=True, 
+                            # use_cookie=True, 
                             default_expiry=timedelta(hours=3))
 
 @loginManager.user_loader()
