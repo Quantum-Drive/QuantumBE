@@ -49,18 +49,21 @@ async def getThumbnail(db: Session, user: User, dataID: int, file: bytes = None)
   
   if not os.path.exists(f"./thumbnails/{dataID}.png"):
     if file:
-      match (description):
-        case "image":
-          image = Image.fromarray(file.file.getvalue())
-        case "video":
-          # with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
-          #   tempFile.write(file)
-          #   tempFile.flush()
-          image = fileUtils.clipVideo(file, extension)
-        case "audio":
-          pass
-        case "document":
-          pass
+      try:
+        match (description):
+          case "image":
+            image = Image.fromarray(file.file.getvalue())
+          case "video":
+            # with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
+            #   tempFile.write(file)
+            #   tempFile.flush()
+            image = fileUtils.clipVideo(file, extension)
+          case "audio":
+            pass
+          case "document":
+            pass
+      except Exception as e:
+        return None
       with open(f"./thumbnails/{dataID}.png", "wb") as f:
         f.write((fileUtils.thumbnail(image)).getvalue())
         
