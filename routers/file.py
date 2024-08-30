@@ -39,45 +39,45 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, fileID: int, file = None):
-  extension = dbGetData(db, Data(id=fileID, userID=user.email)).extension
+async def getThumbnail(db: Session, user: User, data: Data, file: UploadFile = None):
+  extension = data.extension
   tmp = dbGetExtension(db, extension)
   description = tmp.description if tmp else None
   if not description in ["image", "video", "audio", "document"]:
     return None
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   
-  if not os.path.exists(f"./thumbnails/{fileID}.png"):
+  if not os.path.exists(f"./thumbnails/{data.id}.png"):
     if file:
       match (description):
         case "image":
-          image = Image.open(io.BytesIO(file))
+          image = Image.fromarray(file.file.getvalue())
         case "video":
-          with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
-            tempFile.write(file)
-            tempFile.flush()
-            image = await fileUtils.clipVideo(tempFile.name)
+          # with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
+          #   tempFile.write(file)
+          #   tempFile.flush()
+          image = fileUtils.clipVideo(file.file.getvalue())
         case "audio":
           pass
         case "document":
           pass
-      with open(f"./thumbnails/{fileID}.png", "wb") as f:
-        f.write((await fileUtils.thumbnail(image)).getvalue())
+      with open(f"./thumbnails/{data.id}.png", "wb") as f:
+        f.write((fileUtils.thumbnail(image)).getvalue())
         
     else:
       try:
         async with httpx.AsyncClient() as client:
           response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
-                                      params={"userHash": userHash, "fileID": fileID, "description": description},
+                                      params={"userHash": userHash, "fileID": data.id, "description": description},
                                       timeout=None)
           response.raise_for_status()
           
-          with open(f"./thumbnails/{fileID}.png", "wb") as f:
+          with open(f"./thumbnails/{data.id}.png", "wb") as f:
             f.write(response.content)
       except (httpx.RequestError, httpx.HTTPStatusError) as e:
         return None
   
-  return Image.open(f"./thumbnails/{fileID}.png")
+  return Image.open(f"./thumbnails/{data.id}.png")
 
 router = APIRouter(prefix="/file", tags=["File"])
 
