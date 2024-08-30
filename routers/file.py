@@ -62,8 +62,8 @@ async def getThumbnail(db: Session, user: User, fileID: int, file = None):
         case "document":
           pass
       with open(f"./thumbnails/{fileID}.png", "wb") as f:
-        image = await fileUtils.thumbnail(image)
-        image.save(f, format="png")
+        f.write(await fileUtils.thumbnail(image))
+        
     else:
       try:
         async with httpx.AsyncClient() as client:
