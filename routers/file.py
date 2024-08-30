@@ -231,7 +231,7 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
   
-  await getThumbnail(mysqlDB, user, data.id, content)
+  await getThumbnail(mysqlDB, user, data.id, file)
   
   async def iterStream():
     try:
