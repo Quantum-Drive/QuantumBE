@@ -3,13 +3,16 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+thumbnails/
 
 # Test files
 dirCreate.py
 fileInject.py
+treePrint.py
 감사콩.gif
 돔황챠.png
 college.xls
 sample.csv
 test.py
 videoplayback.mp4
+dataCache.db
