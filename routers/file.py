@@ -48,7 +48,9 @@ async def getThumbnail(db: Session, user: User, fileID: int):
   if not os.path.exists(f"./thumbnails/{fileID}.png"):
     try:
       async with httpx.AsyncClient() as client:
-        response = await client.get(urljoin(DS_HOST, "file/thumbnail"), params={"userHash": userHash, "fileID": fileID, "description": description})
+        response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
+                                    params={"userHash": userHash, "fileID": fileID, "description": description},
+                                    timeout=None)
         response.raise_for_status()
         
         with open(f"./thumbnails/{fileID}.png", "wb") as f:
