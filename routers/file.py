@@ -39,15 +39,15 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, data: Data, file: UploadFile = None):
-  extension = data.extension
+async def getThumbnail(db: Session, user: User, dataID: int, file: UploadFile = None):
+  extension = dbGetData(db, Data(id=dataID, userID=user.email)).extension
   tmp = dbGetExtension(db, extension)
   description = tmp.description if tmp else None
   if not description in ["image", "video", "audio", "document"]:
     return None
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   
-  if not os.path.exists(f"./thumbnails/{data.id}.png"):
+  if not os.path.exists(f"./thumbnails/{dataID}.png"):
     if file:
       match (description):
         case "image":
@@ -61,23 +61,23 @@ async def getThumbnail(db: Session, user: User, data: Data, file: UploadFile = N
           pass
         case "document":
           pass
-      with open(f"./thumbnails/{data.id}.png", "wb") as f:
+      with open(f"./thumbnails/{dataID}.png", "wb") as f:
         f.write((fileUtils.thumbnail(image)).getvalue())
         
     else:
       try:
         async with httpx.AsyncClient() as client:
           response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
-                                      params={"userHash": userHash, "fileID": data.id, "description": description},
+                                      params={"userHash": userHash, "fileID": dataID, "description": description},
                                       timeout=None)
           response.raise_for_status()
           
-          with open(f"./thumbnails/{data.id}.png", "wb") as f:
+          with open(f"./thumbnails/{dataID}.png", "wb") as f:
             f.write(response.content)
       except (httpx.RequestError, httpx.HTTPStatusError) as e:
         return None
   
-  return Image.open(f"./thumbnails/{data.id}.png")
+  return Image.open(f"./thumbnails/{dataID}.png")
 
 router = APIRouter(prefix="/file", tags=["File"])
 
@@ -152,7 +152,7 @@ async def fileInfoGet(resourcekey: str = Query(None),
     item["resourcekey"] = base64.b64encode(("/"+getPath(db, user.email, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
     
-    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, data))
+    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item["id"]))
   
   return data
 
