@@ -7,7 +7,9 @@ import shutil
 import base64
 import requests
 
+import fitz
 from PIL import Image
+from moviepy.editor import VideoFileClip
 
 def pathSplit(sPath="/"):
   if not sPath:
@@ -101,66 +103,34 @@ def img2DataURL(img: Image.Image, format: str = "PNG"):
   return f"data:image/{format.lower()};base64,{base64.b64encode(imgByteArr).decode('utf-8')}"
 
 
+async def thumbnail(img: Image.Image, size=(128, 128), quality=85) -> Image.Image:
+  img.thumbnail(size)
+  imgIO = io.BytesIO()
+  img.save(imgIO, format="png", quality=quality)
+  imgIO.seek(0)
+  
+  return imgIO
 
-def makeDir(sFilePath: str):
-  if not sFilePath:
-    return False, "Invalid path"
+async def clipVideo(videoPath: str, time: float = 1.0):
+  with VideoFileClip(videoPath) as clip:
+    frame = clip.get_frame(time)
+    img = Image.fromarray(frame)
+    
+    return img
   
-  os.makedirs(sFilePath)
-  print(sFilePath)
-  return True, "Directory created successfully"
+async def pdf2Image(pdfPath: str, offset=0, limit=1e9):
+  lImgs = []
+  
+  pdfDocument = fitz.open(pdfPath)
+  pdfLast = min(offset+limit, pdfDocument.page_count)
+  
+  for i in range(offset, pdfLast):
+    page = pdfDocument.load_page(i)
+    
+    pixmap = page.get_pixmap()
+    bImage = pixmap.tobytes()
+    img = Image.frombytes(pixmap.colorspace, pixmap.size, bImage)
 
-def makeFile(sFilePath:str, content: bytes):
-  if not sFilePath:
-    return False, "Invalid path"
-  
-  if os.path.exists(sFilePath):
-    return False, "File already exists"
-  
-  with open(sFilePath, "wb") as file:
-    file.write(content)
-  return True, "File saved successfully"
-
-def moveFile(userHash: str, basePath: str, srcPath: str, srcName: str, destPath: str = None, destName: str = None):
-  if not srcPath or not srcName:
-    return False, "Invalid path or file name"
-  
-  if not os.path.exists(f"{basePath}/{userHash}{srcPath}/{srcName}"):
-    return False, "File does not exist"
-  
-  if not destPath and not destName:
-    return False, "Both destination path and file name are not provided"
-  
-  if not destPath:
-    destPath = srcPath
-  if not destName:
-    destName = srcName
-
-  if not os.path.exists(f"{basePath}/{userHash}{destPath}"):
-    return False, "Destination path does not exist"
-  
-  if os.path.exists(f"{basePath}/{userHash}{destPath}/{destName}"):
-    return False, "File already exists in destination"
-
-  os.rename(f"{basePath}/{userHash}{srcPath}/{srcName}", f"{basePath}/{userHash}{destPath}/{destName}")
-  return True, "File moved successfully"
-
-def delete(sPath: str):
-  if not sPath:
-    return False, "Invalid path"
-  
-  if not os.path.exists(sPath):
-    return False, f"Object does not exist {sPath}"
-  
-  try:
-    try:
-      os.remove(sPath)
-    except IsADirectoryError:
-      shutil.rmtree(sPath)
-  except Exception as e:    
-    return False, f"Failed to delete the object {e}"
-  return True, "Object deleted successfully"
-
-
-  
-  
+    lImgs.append(img)
+  return lImgs, -1 if i >= pdfDocument.page_count-1 else i+1
+    

@@ -38,7 +38,7 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, fileID: int):
+async def getThumbnail(db: Session, user: User, fileID: int, file: bytes = None):
   tmp = dbGetExtension(db, dbGetData(db, Data(id=fileID, userID=user.email)).extension)
   description = tmp.description if tmp else None
   if not description in ["image", "video", "audio", "document"]:
@@ -46,17 +46,30 @@ async def getThumbnail(db: Session, user: User, fileID: int):
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   
   if not os.path.exists(f"./thumbnails/{fileID}.png"):
-    try:
-      async with httpx.AsyncClient() as client:
-        response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
-                                    params={"userHash": userHash, "fileID": fileID, "description": description},
-                                    timeout=None)
-        response.raise_for_status()
-        
-        with open(f"./thumbnails/{fileID}.png", "wb") as f:
-          f.write(response.content)
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-      return None
+    if file:
+      match (description):
+        case "image":
+          image = Image.open(io.BytesIO(file))
+        case "video":
+          image = fileUtils.clipVideo(io.BytesIO(file))
+        case "audio":
+          pass
+        case "document":
+          pass
+      with open(f"./thumbnails/{fileID}.png", "wb") as f:
+        image.save(f, format="png")
+    else:
+      try:
+        async with httpx.AsyncClient() as client:
+          response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
+                                      params={"userHash": userHash, "fileID": fileID, "description": description},
+                                      timeout=None)
+          response.raise_for_status()
+          
+          with open(f"./thumbnails/{fileID}.png", "wb") as f:
+            f.write(response.content)
+      except (httpx.RequestError, httpx.HTTPStatusError) as e:
+        return None
   
   return Image.open(f"./thumbnails/{fileID}.png")
 
@@ -211,6 +224,8 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
                                           validationToken=""), user.email, len(content), cache.parentID)
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
+  
+  await getThumbnail(mysqlDB, user, data.id, content)
   
   async def iterStream():
     try:
