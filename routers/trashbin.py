@@ -2,19 +2,24 @@ import os
 import pickle
 import hashlib
 import tarfile
+import requests
+import httpx
+import json
+import base64
+from urllib.parse import urljoin
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Response, Form, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from modules.common import tree
 
 from modules.mysql.model import User, Data
 from modules.mysql.schema import TrashSchema
-from modules.mysql.crud import dbUpdateDataVolume, getPath, dbGetTrash, dbGetTrashAll, dbRestoreTrash, dbDeleteTrash
+from modules.mysql.crud import dbGetData, dbDeleteData, dbExtractDataTree, dbUpdateDataVolume, getPath, dbAddTrash, dbGetTrash, dbGetTrashAll, dbRestoreTrash, dbDeleteTrash
 from modules.mysql.database import getMySQLDB
 
-from .dependencies import loginManager, BASE_PATH, USER_ROOT_PATH, TRASH_PATH
+from .dependencies import loginManager, DS_HOST, BASE_PATH, USER_ROOT_PATH, TRASH_PATH
 
 router = APIRouter(prefix="/trashbin", tags=["Trashbin"])
 
@@ -24,16 +29,65 @@ def getTrashbin(user: User = Depends(loginManager),
   trash = dbGetTrashAll(db, user.email)
   return trash
 
+@router.post("/")
+async def fillTrashbin(request: Request,
+                      # lContentID: str = Form(...),
+                      lContentID: str = Form(...),
+                      user: User = Depends(loginManager),
+                      db: Session = Depends(getMySQLDB)):
+  if not lContentID:
+    raise HTTPException(status_code=400, detail="No content to delete")
+  
+  lContentID = json.loads(lContentID)
+  statuses = {}
+  # lContentID = lContentID.split(",")
+  for contentID in lContentID:
+    contentID = int(contentID)
+    data = dbGetData(db, Data(id=contentID, userID=user.email))
+    if not data:
+      statuses.append({"status_code": 404, "detail": "Data not found"})
+      continue
+    
+    userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
+    metaData = dict()
+    metaData["path"] = getPath(db, user.email, data.parentID)
+    treeRoot, lFiles = dbExtractDataTree(db, user.email, data.id, metaData)
+    trash = dbAddTrash(db, data, user.email)
+    try:
+        response = requests.post(urljoin(DS_HOST, "trash"), 
+                                params={"userHash": userHash},
+                                data={"trashID": trash.id, "lFiles": lFiles, "treePickle": base64.b64encode(pickle.dumps(treeRoot)).decode()})
+        if response.status_code != 201 or not dbDeleteData(db, user.email, data.id):
+          statuses[contentID] = {"status_code":response.status_code, "detail":response.text}
+        else:
+          statuses[contentID] = {"status_code":response.status_code, "detail":"Data deleted successfully"}
+    except requests.exceptions.RequestException as e:
+      dbDeleteTrash(db, user.email, trash.id)
+      statuses[contentID] = {"status_code":400, "detail":"Failed to delete data"}
+
+  # real delete data
+
+  return Response(content=json.dumps(statuses), status_code=207)
+
+
 @router.delete("/")
-def clearTrashbin(user: User = Depends(loginManager),
-                  db: Session = Depends(getMySQLDB)):
+async def clearTrashbin(user: User = Depends(loginManager),
+                        db: Session = Depends(getMySQLDB)):
+  try:
+    response = requests.delete(urljoin(DS_HOST, "trash"), 
+                               params={"userHash": hashlib.sha256(user.email.encode('utf-8')).hexdigest()})
+    if response.status_code != 204:
+      raise HTTPException(status_code=500, detail="Failed to clear trashbin")
+  except requests.exceptions.RequestException as e:
+    raise HTTPException(status_code=500, detail="Failed to clear trashbin")
+  
   if not dbDeleteTrash(db, user.email):
-    raise HTTPException(status_code=400, detail="Failed to clear trashbin")
+    raise HTTPException(status_code=500, detail="Failed to clear trashbin")
   return Response(status_code=204)
 
 
 @router.get("/{contentID}")
-def contentInfo(contentID: int,
+async def contentInfo(contentID: int,
                 user: User = Depends(loginManager),
                 db: Session = Depends(getMySQLDB)):
   trash = dbGetTrash(db, user.email, contentID)
@@ -41,16 +95,9 @@ def contentInfo(contentID: int,
     raise HTTPException(status_code=404, detail="Content not found")
 
   return trash
-  
-
-@router.post("/{contentID}")
-def junk(contentID: int,
-         user: User = Depends(loginManager),
-         db: Session = Depends(getMySQLDB)):
-  pass
 
 @router.put("/{contentID}")
-def restore(contentID: int,
+async def restore(contentID: int,
             user: User = Depends(loginManager),
             db: Session = Depends(getMySQLDB)):
   trash = dbGetTrash(db, user.email, contentID)
@@ -58,29 +105,38 @@ def restore(contentID: int,
     raise HTTPException(status_code=404, detail="Content not found")
   
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  with open(
-    os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{contentID}.tree"), 
-    "rb") as f:
-    treeRoot = pickle.load(f)
+  try:
+    response = requests.get(urljoin(DS_HOST, "trash"), 
+                            params={"userHash": userHash, "trashID": trash.id})
+    if response.status_code != 200:
+      raise HTTPException(status_code=400, detail="Failed to restore content")
+    treeRoot: tree.Tree = pickle.loads(base64.b64decode(response.content))
+  except requests.exceptions.RequestException as e:
+    raise HTTPException(status_code=400, detail="Failed to restore content")
   
-  dbItem = dbRestoreTrash(db, contentID, treeRoot, user.email)
+  dbItem, lPrevFiles, lNewFiles = dbRestoreTrash(db, contentID, treeRoot, user.email)
   if not dbItem:
+    print("!!!")
+    raise HTTPException(status_code=400, detail="Failed to restore content")
+  
+  try:
+    response = requests.put(urljoin(DS_HOST, "trash"), 
+                            params={"userHash": userHash},
+                            data={"trashID": trash.id, "lPrevFiles": lPrevFiles, "lNewFiles": lNewFiles})
+    if response.status_code != 201:
+      raise HTTPException(status_code=response.status_code, detail=response.text)
+  except requests.exceptions.RequestException as e:
     raise HTTPException(status_code=400, detail="Failed to restore content")
   
   if not dbUpdateDataVolume(db, dbItem.id):
     raise HTTPException(status_code=400, detail="Failed to update data volume")
   db.refresh(dbItem)
   
-  with tarfile.open(os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{contentID}.tar.gz"), "r:gz") as tar:
-    tar.extractall(path=os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, treeRoot.value["path"]))
-  os.remove(os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{contentID}.tree"))
-  os.remove(os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{contentID}.tar.gz"))
-  
   return dbItem
 
 
 @router.delete("/{contentID}")
-def delete(contentID: int,
+async def delete(contentID: int,
            user: User = Depends(loginManager),
            db: Session = Depends(getMySQLDB)):
   trash = dbGetTrash(db, user.email, contentID)
