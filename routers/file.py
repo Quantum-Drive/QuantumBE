@@ -9,6 +9,7 @@ import httpx
 import tarfile
 import asyncio
 import requests
+import tempfile
 from typing import Optional, Annotated
 from collections import namedtuple
 from collections.abc import Iterable
@@ -39,7 +40,8 @@ def jsonParse(jsonStr: str):
     return None
 
 async def getThumbnail(db: Session, user: User, fileID: int, file = None):
-  tmp = dbGetExtension(db, dbGetData(db, Data(id=fileID, userID=user.email)).extension)
+  extension = dbGetData(db, Data(id=fileID, userID=user.email)).extension
+  tmp = dbGetExtension(db, extension)
   description = tmp.description if tmp else None
   if not description in ["image", "video", "audio", "document"]:
     return None
@@ -51,7 +53,10 @@ async def getThumbnail(db: Session, user: User, fileID: int, file = None):
         case "image":
           image = Image.open(io.BytesIO(file))
         case "video":
-          image = await fileUtils.clipVideo(io.BytesIO(file))
+          with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
+            tempFile.write(file)
+            tempFile.flush()
+            image = await fileUtils.clipVideo(tempFile.name)
         case "audio":
           pass
         case "document":
