@@ -20,7 +20,8 @@ def dbRegisterUser(db: Session, user: UserSchemaAdd):
                 username=user.username, 
                 password=user.password,
                 createdAt=datetime.now(),
-                lastUsed=datetime.now())
+                lastUsed=datetime.now(),
+                maxVolume=None)
   db.add(dbItem)
   db.commit()
   db.refresh(dbItem)
@@ -52,6 +53,8 @@ def dbUpdateUser(db: Session, user: User, userSchemaUpdate: UserSchemaUpdate):
 
 def dbGetUsedVolume(db: Session, userID: str):
   value = db.query(func.sum(Data.volume)).filter(Data.userID == userID).filter(Data.parentID == None).scalar()
+  if not value:
+    return 0
   return value
 
 def dbDeleteUser(db: Session, user: User):
@@ -115,8 +118,8 @@ def dbGetData(db: Session, data: DataSchemaGet):
   dbItem = db.query(Data).filter(Data.id == data.id, Data.userID == data.userID).first()
   return dbItem
 
-def dbUpdateData(db: Session, data: DataSchemaUpdate, objID: int):
-  dbItem = db.query(Data).filter(Data.id == objID).first()
+def dbUpdateData(db: Session, data: DataSchemaUpdate, userID: str, objID: int):
+  dbItem = db.query(Data).filter(Data.id == objID, Data.userID == userID).first()
   if not dbItem:
     return None
   
@@ -144,18 +147,18 @@ def dbUpdateDataVolume(db: Session, objID: int):
 
   return dbUpdateDataVolume(db, dbItem.parentID)
 
-def dbDeleteData(db: Session, objID: int):
+def dbDeleteData(db: Session, userID: str, objID: int):
   try:
-    dbItem = db.query(Data).filter(Data.id == objID).first()
+    dbItem = db.query(Data).filter(Data.id == objID, Data.userID == userID).first()
     db.delete(dbItem)
     db.commit()
     return True
-  except SQLAlchemyError:
+  except SQLAlchemyError as e:
     db.rollback()
     return False
 
-def getPath(db: Session, user: User, objID: int = None):
-  return "/".join([data.name for data in dbGetPath(db, user.email, objID=objID)]) if objID is not None else ""
+def getPath(db: Session, userID: str, objID: int = None):
+  return "/".join([data.name for data in dbGetPath(db, userID, objID=objID)]) if objID is not None else ""
 
 def dbGetPath(db: Session, userID: str, objID: int = None, sPath: str = None, ):
   lPath = []
@@ -191,16 +194,24 @@ def dbExtractDataTree(db: Session, userID: str, dataID: int, metaData: dict):
   root = tree.Tree(metaData)
   dataNode = tree.Node(dataID, dbUtils.model2dict(dbItem))
   root.addChild(dataNode)
-  _dbExtractDataTree(db, userID, dataNode)
-  return root
+  
+  if not dbItem.isDirectory:
+    return root, [dataID]
+  
+  return root, _dbExtractDataTree(db, userID, dataNode)
 
 def _dbExtractDataTree(db: Session, userID: str, parentNode: tree.Node):
   dbItems = db.query(Data).filter(Data.parentID == parentNode.name, Data.userID == userID).all()
+  lFiles = []
   for item in dbItems:
     childNode = tree.Node(item.id, dbUtils.model2dict(item))
     parentNode.addChild(childNode)
-    _dbExtractDataTree(db, userID, childNode)
-  return parentNode
+    
+    if not item.isDirectory:
+      lFiles.append(item.id)
+    else:
+      lFiles += _dbExtractDataTree(db, userID, childNode)
+  return lFiles
 
 # Share CRUD
 def dbAddShare(db: Session, share: ShareSchema, userID: str):
@@ -282,7 +293,6 @@ def dbAddTrash(db: Session, data: DataSchema, userID: str):
     db.add(dbItem)
     db.commit()
   except SQLAlchemyError as e:
-    print(str(e))
     db.rollback()
     return None
   
@@ -300,7 +310,7 @@ def dbGetTrashAll(db: Session, userID: str):
 def dbRestoreTrash(db: Session, id: int, root: tree.Tree, userID: str):
   dbItem = db.query(Trash).filter(Trash.id == id, Trash.userID == userID).first()
   if not dbItem:
-    return None
+    return None, [], []
   
   parentID = dbGetPath(db, userID, sPath=root.value["path"])
   if len(parentID) > 1:
@@ -310,22 +320,24 @@ def dbRestoreTrash(db: Session, id: int, root: tree.Tree, userID: str):
   else:
     parentID = None
   
-  restored = _dbRestoreTrash(db, root.getChildren()[0], userID, parentID)
+  restored, lPrevFiles, lNewFiles = _dbRestoreTrash(db, root.getChildren()[0], userID, parentID)
   if not restored:
     db.rollback()
-    return None
+    return None, [], []
   
   db.delete(dbItem)
   db.commit()
   db.refresh(restored)
-  return restored
+  return restored, lPrevFiles, lNewFiles
 
 def _dbRestoreTrash(db: Session, node: tree.Node, userID: str, parentID: int = None):
   flag = False
+  lPrevFiles = []
+  lNewFiles = []
   dbItems = dbSearchData(db, Data(userID=userID, name=node.value["name"], parentID=parentID), filterParentID=True)
   if dbItems:
     if not dbItems[0].isDirectory or dbItems[0].isDirectory != node.value["isDirectory"]:
-      return None
+      return None, [], []
     dbItem = dbItems[0]
     flag = True
   else:
@@ -350,21 +362,25 @@ def _dbRestoreTrash(db: Session, node: tree.Node, userID: str, parentID: int = N
                     createdAt=node.value["createdAt"],
                     extension=dbMatchExtension(db, node.value),
                     isFavorite=False)
-    
+
     db.add(dbItem)
-  
+    if not node.value["isDirectory"]:
+      lPrevFiles.append(node.value["id"]) 
+      lNewFiles.append(dbItem.id)
   dbItems = []
   for child in node.getChildren():
-    child = _dbRestoreTrash(db, child, userID, dbItem.id)
+    child, lTmpPrevFiles, lTmpNewFiles = _dbRestoreTrash(db, child, userID, dbItem.id)
     if not child:
       db.rollback()
-      return None
+      return None, [], []
     dbItems.append(child)
+    lPrevFiles += lTmpPrevFiles
+    lNewFiles += lTmpNewFiles
   
   if flag:
     dbItem.volume += sum([item.volume for item in dbItems])
 
-  return dbItem
+  return dbItem, lPrevFiles, lNewFiles
 
 def dbDeleteTrash(db: Session, userID: str, id: int = None):
   try:

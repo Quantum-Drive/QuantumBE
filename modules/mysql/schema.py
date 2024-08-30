@@ -11,6 +11,7 @@ class UserSchema(BaseModel):
   profilePath: Optional[str]
   createdAt: datetime
   lastUsed: datetime
+  maxVolume: int
   
   class Config:
     from_attributes = True

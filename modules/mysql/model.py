@@ -15,6 +15,7 @@ class User(Base):
   profilePath = Column(String)
   createdAt = Column(DateTime)
   lastUsed = Column(DateTime)
+  maxVolume = Column(Integer)
 
 class Data(Base):
   __tablename__ = 'data'
@@ -32,7 +33,7 @@ class Data(Base):
   
   user = relationship('User', foreign_keys=[userID])
   extensions = relationship('Extension', foreign_keys=[extension], back_populates='data')
-  shares = relationship('Share', back_populates='data')
+  shares = relationship('Share', back_populates='data', cascade='all, delete-orphan')
   
   __table_args__ = (
     Index('idx_username_email', "userID", "name"),
@@ -41,8 +42,9 @@ class Data(Base):
 class Share(Base):
   __tablename__ = 'shares'
   
-  dataID = Column(Integer, ForeignKey('data.id', ondelete='CASCADE'), primary_key=True)
-  receivedID = Column(String, ForeignKey('users.email', ondelete='CASCADE'), primary_key=True, index=True)
+  id = Column(Integer, primary_key=True, index=True)
+  dataID = Column(Integer, ForeignKey('data.id', ondelete='CASCADE'), index=True, nullable=True)
+  receivedID = Column(String, ForeignKey('users.email', ondelete='CASCADE'), index=True, nullable=True)
   expiredTime = Column(DateTime)
   
   data = relationship('Data', foreign_keys=[dataID], back_populates='shares')
