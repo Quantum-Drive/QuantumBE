@@ -19,7 +19,8 @@ from routers.dependencies import loginManager
 origins = [
   "http://localhost:5300",
   "https://localhost:3000",
-  "https://quantumdrive.vercel.app"
+  "https://quantumdrive.vercel.app",
+  "https://port-0-quantumbe-lzzoavyk6dad91f1.sel4.cloudtype.app/"
 ]
 
 app = FastAPI()
@@ -97,7 +98,7 @@ async def protected(token: str = Depends(loginManager)):
 
 if __name__ == "__main__":
   import uvicorn
-  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True,
-              ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
+  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True)
+              # ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
   
   
