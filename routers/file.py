@@ -152,7 +152,7 @@ async def fileInfoGet(resourcekey: str = Query(None),
     item["resourcekey"] = base64.b64encode(("/"+getPath(db, user.email, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
     
-    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item["id"]))
+    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, data))
   
   return data
 
