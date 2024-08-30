@@ -6,17 +6,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from .model import DataCache
 from .schema import DataCacheSchema
 
-# User CRUD
+# Cache CRUD
 def dbCreateCache(db: Session, dataCache: DataCacheSchema):
-  dbItem = db.query(DataCache).filter(DataCache.userHash == dataCache.userHash).first()
+  dbItem = db.query(DataCache).filter(DataCache.userHash == dataCache.userHash, 
+                                      DataCache.parentID == dataCache.parentID,
+                                      DataCache.fileName == dataCache.fileName).first()
   if dbItem:
-    dbItem.parentID = dataCache.parentID
-    dbItem.fileName = dataCache.fileName
     dbItem.isEncrypted = dataCache.isEncrypted
     dbItem.validationToken = dataCache.validationToken
     dbItem.inputTime = datetime.now()
-    db.commit()
-    db.refresh(dbItem)
     return dbItem
 
   dbItem = DataCache(userHash=dataCache.userHash,
@@ -30,8 +28,8 @@ def dbCreateCache(db: Session, dataCache: DataCacheSchema):
   db.refresh(dbItem)
   return dbItem
 
-def dbGetCache(db: Session, userHash: str):
-  dbItem = db.query(DataCache).filter(DataCache.userHash == userHash).first()
+def dbGetCache(db: Session, userHash: str, validationToken: str):
+  dbItem = db.query(DataCache).filter(DataCache.userHash == userHash, DataCache.validationToken == validationToken).first()
   return dbItem
 
 def dbGetAllCache(db: Session):

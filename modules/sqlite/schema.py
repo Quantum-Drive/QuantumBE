@@ -13,4 +13,4 @@ class DataCacheSchema(BaseModel):
   
   class Config:
     from_attributes = True
-
+    
