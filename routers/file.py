@@ -1,22 +1,28 @@
 import os
+import io
 import hashlib
 import base64
 import json
 import pickle
 import shutil
+import httpx
 import tarfile
+import asyncio
+import requests
 from typing import Optional, Annotated
 from collections import namedtuple
 from collections.abc import Iterable
+from urllib.parse import urljoin
+from PIL import Image
 from fastapi import APIRouter, Request, Depends, HTTPException, File, UploadFile, Query, Response
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from modules.common import *
 
 from modules.mysql.model import User, Data
 from modules.mysql.schema import DataSchema, DataSchemaAdd, DataSchemaGet, DataSchemaUpdate, TrashSchema
-from modules.mysql.crud import dbGetUser, dbAddData, dbSearchData, dbGetData, dbUpdateData, dbUpdateDataVolume, dbDeleteData, getPath, dbGetPath, dbAddShare, dbGetSharing, dbGetShared, dbDeleteShare, dbExtractDataTree, dbGetExtension, dbGetDataByFileDescription, dbAddTrash
+from modules.mysql.crud import dbGetUser, dbAddData, dbSearchData, dbGetData, dbUpdateData, dbUpdateDataVolume, dbDeleteData, dbGetUsedVolume, getPath, dbGetPath, dbAddShare, dbGetSharing, dbGetShared, dbDeleteShare, dbExtractDataTree, dbGetExtension, dbGetDataByFileDescription, dbAddTrash
 from modules.mysql.database import getMySQLDB
 
 from modules.sqlite.model import DataCache
@@ -24,7 +30,7 @@ from modules.sqlite.schema import DataCacheSchema
 from modules.sqlite.crud import dbCreateCache, dbGetCache, dbDeleteCache
 from modules.sqlite.database import getSQLiteDB
 
-from .dependencies import loginManager, BASE_PATH, USER_ROOT_PATH, TRASH_PATH, TEMP_PATH
+from .dependencies import loginManager, DS_HOST, BASE_PATH, USER_ROOT_PATH, TRASH_PATH, TEMP_PATH
 
 def jsonParse(jsonStr: str):
   try:
@@ -32,30 +38,25 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-def addThumbnail(db: Session, item: dict, user: User):
-  target = None
-  tmp = dbGetExtension(db, item["extension"])
+async def getThumbnail(db: Session, user: User, fileID: int):
+  tmp = dbGetExtension(db, dbGetData(db, Data(id=fileID, userID=user.email)).extension)
   description = tmp.description if tmp else None
-
-  match (description):
-    case ("pdf"| "video"| "audio"| "document"| "image"):
-      userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-      match (description):
-        case "pdf":
-          target = contentUtils.pdf2ImageList(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"])), offset=0, limit=1)[0]
-        case "video":
-          target = contentUtils.img2DataURL(contentUtils.clipVideo(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"]))), "jpeg")
-        case "audio":
-          target = None
-        case "document":
-          target = None
-        case "image":
-          target = contentUtils.img2DataURL(contentUtils.loadImg(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, item["id"]))), item["extension"])
-    case _:
-      pass
-  item["thumbnail"] = target
+  if not description in ["image", "video", "audio", "document"]:
+    return None
+  userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   
-  return item
+  if not os.path.exists(f"./thumbnails/{fileID}.png"):
+    try:
+      async with httpx.AsyncClient() as client:
+        response = await client.get(urljoin(DS_HOST, "file/thumbnail"), params={"userHash": userHash, "fileID": fileID, "description": description})
+        response.raise_for_status()
+        
+        with open(f"./thumbnails/{fileID}.png", "wb") as f:
+          f.write(response.content)
+    except (httpx.RequestError, httpx.HTTPStatusError) as e:
+      return None
+  
+  return Image.open(f"./thumbnails/{fileID}.png")
 
 router = APIRouter(prefix="/file", tags=["File"])
 
@@ -127,9 +128,10 @@ async def fileInfoGet(resourcekey: str = Query(None),
   data = data[:limit] if limit and len(data) > limit else data
   
   for item in data:
-    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user, objID=item["parentID"])).encode('utf-8')).decode()
+    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user.email, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
-    item = addThumbnail(db, item, user)
+    
+    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item["id"]))
   
   return data
 
@@ -164,9 +166,6 @@ async def fileCache(filedata: DataSchemaAdd,
   if data:
     raise HTTPException(status_code=400, detail="File(same name) already exists")
   if filedata.isDirectory:
-    flag, msg = fileUtils.makeDir(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, filePath[1:], filedata.name))
-    if not flag:
-      raise HTTPException(status_code=400, detail=msg)
     data = dbAddData(mysqlDB, filedata, user.email, 0, parentID)
   else:
     data = dbCreateCache(cacheDB, DataCacheSchema(userHash=userHash,
@@ -190,17 +189,18 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
     raise HTTPException(status_code=400, detail="File not found")
   
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  cache = dbGetCache(cacheDB, userHash)
-  if not cache:
-    raise HTTPException(status_code=400, detail="Cache not found")
-  
   content = await file.read()
-  if cache.validationToken != hashlib.sha256(content).hexdigest():
-    raise HTTPException(status_code=400, detail="Data hash mismatch, data has been modified during transmission")
+  validationToken = hashlib.sha256(content).hexdigest()
+  cache = dbGetCache(cacheDB, userHash, validationToken)
+  if not cache:
+    raise HTTPException(status_code=400, detail="Data hash mismatch")
   
   data = dbSearchData(mysqlDB, Data(name=cache.fileName, userID=user.email, parentID=cache.parentID), True)
   if data:
     raise HTTPException(status_code=400, detail="File(same name) already exists")
+  
+  if len(content)+dbGetUsedVolume(mysqlDB, user.email) > (defaultMaxVolume := user.maxVolume if not user.maxVolume else 1024*1024*1024*50):
+    raise HTTPException(status_code=400, detail=f"File size exceeds the maximum volume({defaultMaxVolume})")
   
   data = dbAddData(mysqlDB, DataSchemaAdd(name=cache.fileName,
                                           resourceKey="",
@@ -210,21 +210,28 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
   
-  ########################################
-  # modify later
-  ########################################
-  flag, msg = fileUtils.makeFile(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(mysqlDB, user, objID=data.parentID), data.name), content)    
-  if not flag:
-    raise HTTPException(status_code=400, detail=msg)
+  async def iterStream():
+    try:
+      async with httpx.AsyncClient() as client:
+        response = await client.post(urljoin(DS_HOST, "file/"), 
+                                     params={"userHash":userHash, "fileID": data.id}, 
+                                     files={"file": (str(data.id), content, file.content_type)}, 
+                                     timeout=None)
+        response.raise_for_status()
+    except httpx.RequestError as e:
+      pass
+  asyncio.create_task(iterStream())
+  
   parentID = cache.parentID
   dbDeleteCache(cacheDB, userHash)
   
-  if dbUpdateDataVolume(mysqlDB, parentID):
-    return JSONResponse({"message": "File uploaded successfully"}, status_code=201)
-  return HTTPException(status_code=400, detail="File upload failed")
+  if not dbUpdateDataVolume(mysqlDB, parentID):
+    raise HTTPException(status_code=400, detail="File upload failed")
+  return JSONResponse({"message": "File uploaded successfully"}, status_code=201)
+
 
 @router.get("/search")
-def fileSearch(keyword: str = Query(...),
+async def fileSearch(keyword: str = Query(...),
                offset: int = Query(0),
                limit: int = Query(None),
                order: str = Query(None),
@@ -261,35 +268,35 @@ def fileSearch(keyword: str = Query(...),
   data = data[:limit] if limit and len(data) > limit else data
   
   for item in data:
-    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user, objID=item["parentID"])).encode('utf-8')).decode()
+    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user.email, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
-    item = addThumbnail(db, item, user)
+    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item["id"]))
   
   return data
 
+
 @router.get("/{contentID}")
-def fileDownload(contentID: int,
-                 user: User = Depends(loginManager),
-                 db: Session = Depends(getMySQLDB)):
-  data: Data = dbGetData(db, Data(id=contentID, userID=user.email))
+def fileDataGet(contentID: int,
+                user: User = Depends(loginManager),
+                db: Session = Depends(getMySQLDB)):
+  data = dbGetData(db, Data(id=contentID, userID=user.email))
   if not data:
     raise HTTPException(status_code=404, detail="Data not found")
-  userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  sPath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, dbGetPath(db, user.email, objID=data.id, ))
-  return FileResponse(sPath, filename=data.name)
+  
+  return data
+
 
 @router.put("/{contentID}")
 def fileUpdate(contentID: int,
                 updateData: DataSchemaUpdate,
                 user: User = Depends(loginManager),
                 db: Session = Depends(getMySQLDB)):
-  updateData.id = contentID
   srcData = dbGetData(db, Data(id=contentID, userID=user.email))
   if not srcData:
     raise HTTPException(status_code=404, detail="Data not found")
   
-  destPath = dbGetPath(db, updateData.parentID, user)
-  pass # delete logic first
+  updatedData = dbUpdateData(db, updateData, user.email, contentID)
+  return updatedData
 
 @router.delete("/{contentID}")
 def fileDelete(contentID: int,
@@ -300,39 +307,49 @@ def fileDelete(contentID: int,
     raise HTTPException(status_code=404, detail="Data not found")
   
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  sPath = getPath(db, user, objID=data.parentID)
-  metaData = dict()
-  metaData['path'] = sPath
-  treeRoot = dbExtractDataTree(db, user.email, data.id, metaData)
-  trash = dbAddTrash(db, data, user.email)
-  with open(
-    os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{trash.id}.tree"), 
-    "wb") as f:
-    pickle.dump(treeRoot, f)
+  try:
+    response = requests.delete(urljoin(DS_HOST, "file"), params={"userHash": userHash, "fileID": data.id})
+    
+    if response.status_code != 204:
+      raise HTTPException(status_code=response.status_code, detail=response.text)
+  except requests.exceptions.RequestException as e:
+    raise HTTPException(status_code=400, detail="Failed to delete data")
   
-  absolutePath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, sPath, data.name)
-  with tarfile.open(os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{trash.id}.tar.gz"), "w:gz") as tar:
-    tar.add(absolutePath, arcname=data.name)
-  
-  with open(
-    os.path.join(BASE_PATH, userHash, TRASH_PATH, f"{trash.id}.tree"), 
-    "rb") as f:
-    treeRoot = pickle.load(f)
-  
-  flag, msg = fileUtils.delete(os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, sPath, data.name))
-  if not flag:
-    raise HTTPException(status_code=400, detail=msg)
-  
-  if not dbDeleteData(db, data.id):
+  if not dbDeleteData(db, user.email, data.id):
     raise HTTPException(status_code=500, detail="Failed to delete data")
   
   if not dbUpdateDataVolume(db, data.parentID):
-    return HTTPException(status_code=500, detail="Failed to delete data perfectly")
-  return Response(status_code=204)
+    raise HTTPException(status_code=500, detail="Failed to delete data perfectly")
   
+  if os.path.exists(f"./thumbnails/{contentID}.png"):
+    os.remove(f"./thumbnails/{contentID}.png")
+  return Response(status_code=204)
 
-@router.get("/{contentID}/detail")
-async def fileDetailGet(contentID: int,
+
+@router.get("/download/{contentID}")
+async def fileDownload(contentID: int,
+                 user: User = Depends(loginManager),
+                 db: Session = Depends(getMySQLDB)):
+  data: Data = dbGetData(db, Data(id=contentID, userID=user.email))
+  if not data:
+    raise HTTPException(status_code=404, detail="Data not found")
+  userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
+  try:
+    async with httpx.AsyncClient() as client:
+      response = await client.get(urljoin(DS_HOST, "file/"), params={"userHash":userHash, "fileID": data.id}, timeout=None)
+      response.raise_for_status()
+    
+      async def iterStream():
+        async for chunk in response.aiter_bytes(chunk_size=65536):
+          yield chunk
+      headers = {"Content-Disposition": f'attachment; filename="{data.name}"'}
+      return StreamingResponse(iterStream(), media_type="application/octet-stream", headers=headers)
+  except httpx.RequestError as e:
+    raise HTTPException(status_code=400, detail=f"Failed to get the file: {e}")
+
+
+@router.get("/preview/{contentID}")
+async def filePreview(contentID: int,
                         offset: int = Query(0),
                         limit: int = Query(None),
                         user: User = Depends(loginManager),
@@ -347,7 +364,7 @@ async def fileDetailGet(contentID: int,
     
     data.description = extensionData.description
     
-    sPath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user, objID=data.id))
+    sPath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user.email, objID=data.id))
     match (extensionData.description):
       case "document":
         if data.extension == "pdf":
