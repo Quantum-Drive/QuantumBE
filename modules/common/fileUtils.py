@@ -6,6 +6,8 @@ import hashlib
 import shutil
 import base64
 import requests
+import cv2
+import numpy as np
 
 import fitz
 from PIL import Image
@@ -103,7 +105,7 @@ def img2DataURL(img: Image.Image, format: str = "PNG"):
   return f"data:image/{format.lower()};base64,{base64.b64encode(imgByteArr).decode('utf-8')}"
 
 
-async def thumbnail(img: Image.Image, size=(128, 128), quality=85) -> Image.Image:
+def thumbnail(img: Image.Image, size=(128, 128), quality=85) -> Image.Image:
   img.thumbnail(size)
   imgIO = io.BytesIO()
   img.save(imgIO, format="png", quality=quality)
@@ -111,14 +113,17 @@ async def thumbnail(img: Image.Image, size=(128, 128), quality=85) -> Image.Imag
   
   return imgIO
 
-async def clipVideo(videoPath, time: float = 1.0):
-  with VideoFileClip(videoPath) as clip:
-    frame = clip.get_frame(time)
-    img = Image.fromarray(frame)
-    
-    return img
+def clipVideo(videoBytes, time: float = 1.0):
+  npArray = np.frombuffer(videoBytes)
+  video = cv2.VideoCapture(cv2.imdecode(npArray, cv2.IMREAD_COLOR))
   
-async def pdf2Image(pdfPath: str, offset=0, limit=1e9):
+  video.set(cv2.CAP_PROP_POS_FRAMES, time*3600)
+  ret, frame = video.read
+  if not ret:
+    return None
+  return Image.fromarray(frame)
+  
+def pdf2Image(pdfPath: str, offset=0, limit=1e9):
   lImgs = []
   
   pdfDocument = fitz.open(pdfPath)
