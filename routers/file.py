@@ -199,7 +199,7 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   if data:
     raise HTTPException(status_code=400, detail="File(same name) already exists")
   
-  if len(content)+dbGetUsedVolume(mysqlDB, user.email) > (defaultMaxVolume := user.maxVolume if not user.maxVolume else 1024*1024*1024*50):
+  if len(content)+dbGetUsedVolume(mysqlDB, user.email) > (defaultMaxVolume := user.maxVolume if user.maxVolume else 1024*1024*1024*50):
     raise HTTPException(status_code=400, detail=f"File size exceeds the maximum volume({defaultMaxVolume})")
   
   data = dbAddData(mysqlDB, DataSchemaAdd(name=cache.fileName,
