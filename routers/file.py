@@ -39,7 +39,7 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, dataID: int, file: UploadFile = None):
+async def getThumbnail(db: Session, user: User, dataID: int, file: bytes = None):
   extension = dbGetData(db, Data(id=dataID, userID=user.email)).extension
   tmp = dbGetExtension(db, extension)
   description = tmp.description if tmp else None
@@ -56,7 +56,7 @@ async def getThumbnail(db: Session, user: User, dataID: int, file: UploadFile = 
           # with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
           #   tempFile.write(file)
           #   tempFile.flush()
-          image = fileUtils.clipVideo(file.file.getvalue(), extension)
+          image = fileUtils.clipVideo(file, extension)
         case "audio":
           pass
         case "document":
@@ -231,7 +231,7 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
   
-  await getThumbnail(mysqlDB, user, data.id, file)
+  await getThumbnail(mysqlDB, user, data.id, content)
   
   async def iterStream():
     try:
