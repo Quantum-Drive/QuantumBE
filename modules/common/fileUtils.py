@@ -111,7 +111,7 @@ async def thumbnail(img: Image.Image, size=(128, 128), quality=85) -> Image.Imag
   
   return imgIO
 
-async def clipVideo(videoPath: str, time: float = 1.0):
+async def clipVideo(videoPath, time: float = 1.0):
   with VideoFileClip(videoPath) as clip:
     frame = clip.get_frame(time)
     img = Image.fromarray(frame)

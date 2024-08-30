@@ -38,7 +38,7 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, fileID: int, file: bytes = None):
+async def getThumbnail(db: Session, user: User, fileID: int, file = None):
   tmp = dbGetExtension(db, dbGetData(db, Data(id=fileID, userID=user.email)).extension)
   description = tmp.description if tmp else None
   if not description in ["image", "video", "audio", "document"]:
@@ -57,6 +57,7 @@ async def getThumbnail(db: Session, user: User, fileID: int, file: bytes = None)
         case "document":
           pass
       with open(f"./thumbnails/{fileID}.png", "wb") as f:
+        image = await fileUtils.thumbnail(image)
         image.save(f, format="png")
     else:
       try:
