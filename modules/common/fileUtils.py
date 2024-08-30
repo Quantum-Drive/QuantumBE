@@ -1,8 +1,13 @@
 import os
+import io
 import re
 import pickle
 import hashlib
 import shutil
+import base64
+import requests
+
+from PIL import Image
 
 def pathSplit(sPath="/"):
   if not sPath:
@@ -86,11 +91,20 @@ def isAvailableName(sFileName: str):
   
   return True, "Valid file name"
 
+def img2DataURL(img: Image.Image, format: str = "PNG"):
+  if not img:
+    return None
+  
+  imgByteArr = io.BytesIO()
+  img.save(imgByteArr, format=format)
+  imgByteArr = imgByteArr.getvalue()
+  return f"data:image/{format.lower()};base64,{base64.b64encode(imgByteArr).decode('utf-8')}"
+
+
+
 def makeDir(sFilePath: str):
   if not sFilePath:
     return False, "Invalid path"
-  if os.path.exists(sFilePath):
-    return False, "Directory already exists"
   
   os.makedirs(sFilePath)
   print(sFilePath)
