@@ -1,4 +1,7 @@
+import os
+import re
 import hashlib
+import requests
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
@@ -17,7 +20,7 @@ from modules.mysql.crud import dbRegisterUser, dbDeleteUser
 from modules.mysql.crud import dbGetData, dbDeleteData
 from modules.mysql.database import getMySQLDB
 
-from .dependencies import loginManager, getUser, BASE_PATH, USER_ROOT_PATH, TRASH_PATH
+from .dependencies import loginManager, DS_HOST, getUser, BASE_PATH, USER_ROOT_PATH, TRASH_PATH
 
 router = APIRouter(prefix="/auth", tags=["Authenticator"])
 
@@ -28,25 +31,29 @@ async def signup(Response: JSONResponse,
   if(getUser(userdata.email, db)):
     raise HTTPException(status_code=403, detail="User already exists")
   
+  if len(userdata.password) < 8:
+    raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+  
+  pattern = re.compile(r'[!@#$%^&*(),.?":{}|<>]')
+  if not pattern.search(userdata.password):
+    raise HTTPException(status_code=400, detail="Password must contain at least one special character")
+  
+  userdata.password = hashlib.sha256(userdata.password.encode('utf-8')).hexdigest()
+  
   user = dbRegisterUser(db, userdata)
   if user:
     userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-    flag, msg = makeDir(userHash, BASE_PATH, "/", "/")
-    if not flag:
-      raise HTTPException(status_code=400, detail=msg)
-
-    flag, msg = makeDir(userHash, BASE_PATH, "/", USER_ROOT_PATH)
-    if not flag:
-      raise HTTPException(status_code=400, detail=msg)
+    response = requests.post(f"{DS_HOST}/user", params={"userHash": userHash})
     
-    flag, msg = makeDir(userHash, BASE_PATH, "/", TRASH_PATH)
-    if not flag:
-      raise HTTPException(status_code=400, detail=msg)
+    if response.status_code != 201:
+      dbDeleteUser(db, user.email)
+      raise HTTPException(status_code=400, detail="User registration failed")
     
-    response = JSONResponse({"message": "User created successfully"}, status_code=201)
+    # response = JSONResponse({"message": "User created successfully"}, status_code=201)
     token = loginManager.create_access_token(data={'sub':user.email},
                                              scopes=['read:protected', 'write:protected'])
-    response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
+    response = JSONResponse({"access_token": token, "token_type":"bearer"}, status_code=201)
+    # response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
     # response.set_cookie(key="access-token", value=token, httponly=True)
     return response
   return HTTPException(status_code=400, detail="User creation failed")
@@ -56,7 +63,7 @@ async def login(formData: OAuth2PasswordRequestForm = Depends()):
   grant_type = formData.grant_type
   if grant_type == "password":
     username = formData.username
-    password = formData.password
+    password = hashlib.sha256(formData.password.encode('utf-8')).hexdigest()
 
     user = getUser(username)
     if not user or user.password != password:
@@ -66,12 +73,13 @@ async def login(formData: OAuth2PasswordRequestForm = Depends()):
     # response = RedirectResponse(url="/protected", status_code=302)
     token = loginManager.create_access_token(data={'sub':user.email},
                                              scopes=['read:protected', 'write:protected'])
-    refreshToken = loginManager.create_access_token(data={'sub':user.email},
-                                                    expires=timedelta(days=7))
+    # refreshToken = loginManager.create_access_token(data={'sub':user.email},
+    #                                                 expires=timedelta(days=7))
     # response = JSONResponse({"access_token": token, "refresh_token": refreshToken, "token_type":"bearer"}, status_code=200)
-    response = JSONResponse({"message": "Login successful"}, status_code=200)
+    response = JSONResponse({"access_token": token, "token_type":"bearer"}, status_code=200)
+    # response = JSONResponse({"message": "Login successful"}, status_code=200)
     # loginManager.set_cookie(response, token)
-    response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
+    # response.set_cookie(key="access-token", value=token, httponly=True, secure=True, samesite="None")
     # response.set_cookie(key="access-token", value=token, httponly=True)
     return response
   else:
@@ -100,23 +108,14 @@ def logout(user: User = Depends(loginManager)):
 @router.delete("/withdraw")
 async def withdraw(user: User = Depends(loginManager),
                    db: Session = Depends(getMySQLDB)):
-  # db Data delete part
-  dbList = dbGetData(db, Data(userID=user.email), takeAll=True)
-  for data in dbList:
-    try:
-      dbDeleteData(db, data.id)
-    except SQLAlchemyError:
-      pass
-  
   # user file dir delete part
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  flag, msg = delete(userHash, BASE_PATH, "/", "/")
-  if not flag:
-    raise HTTPException(status_code=400, detail=msg)
+  response = requests.delete(f"{DS_HOST}/user", params={"userHash": userHash})
   
-  if dbDeleteUser(db, user.email):
-    response = Response(status_code=204)
-    response.delete_cookie("access-token")
-    return response
-  else:
+  if response.status_code != 204 or not dbDeleteUser(db, user.email):
     return HTTPException(status_code=400, detail="User deletion failed")
+  
+  response = Response(status_code=204)
+  response.delete_cookie("access-token")
+  return response
+    
