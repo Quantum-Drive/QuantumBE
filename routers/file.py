@@ -62,7 +62,7 @@ async def getThumbnail(db: Session, user: User, fileID: int, file = None):
         case "document":
           pass
       with open(f"./thumbnails/{fileID}.png", "wb") as f:
-        f.write(await fileUtils.thumbnail(image))
+        f.write((await fileUtils.thumbnail(image)).getvalue())
         
     else:
       try:
