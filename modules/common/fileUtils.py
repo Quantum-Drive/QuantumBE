@@ -113,7 +113,8 @@ def thumbnail(img: Image.Image, size=(128, 128), quality=85) -> Image.Image:
   
   return imgIO
 
-def clipVideo(videoIO, format="mp4", time: float = 1.0):
+def clipVideo(videoBytes, format="mp4", time: float = 1.0):
+  videoIO = io.BytesIO(videoBytes)
   reader = imageio.get_reader(videoIO, format=format)
   frameNum = time * 3600
   

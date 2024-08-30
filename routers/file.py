@@ -56,7 +56,7 @@ async def getThumbnail(db: Session, user: User, dataID: int, file: UploadFile = 
           # with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
           #   tempFile.write(file)
           #   tempFile.flush()
-          image = fileUtils.clipVideo(file.file, extension)
+          image = fileUtils.clipVideo(file.file.getvalue(), extension)
         case "audio":
           pass
         case "document":
