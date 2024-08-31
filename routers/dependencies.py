@@ -17,7 +17,7 @@ TRASH_PATH = "trash"
 TEMP_PATH = "temp"
 SECRET = "super-secret-key"
 loginManager = LoginManager(SECRET, token_url="/auth/login", 
-                            # use_cookie=True, 
+                            use_cookie=True, 
                             default_expiry=timedelta(hours=3))
 
 @loginManager.user_loader()

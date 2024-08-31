@@ -14,10 +14,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from periodicTasks import sqliteJobs
 
 from routers import authenticator, profile, file, trashbin
-from routers.dependencies import loginManager
+from routers.dependencies import loginManager, SECRET
 
 origins = [
   "http://localhost:5300",
+  "http://localhost:3000",
   "https://localhost:3000",
   "https://quantumdrive.vercel.app",
   "https://port-0-quantumbe-lzzoavyk6dad91f1.sel4.cloudtype.app/"
@@ -47,36 +48,36 @@ async def startup_event():
 async def shutdown_event():
   scheduler.shutdown()
 
-# @app.middleware("https")
-# @app.middleware("http")
-# async def refreshSession(request: Request, call_next):
-#   # if request.headers and request.headers.get("Authorization"):
-#   if request.cookies and request.cookies.get("access-token"):
-#     token = request.cookies.get("access-token")
-#     #token = request.headers.get("Authorization")
+@app.middleware("https")
+@app.middleware("http")
+async def refreshSession(request: Request, call_next):
+  # if request.headers and request.headers.get("Authorization"):
+  if request.cookies and request.cookies.get("access-token"):
+    token = request.cookies.get("access-token")
+    #token = request.headers.get("Authorization")
     
-#     # token = token.split(" ")[1]
-#     # userID = loginManager._get_payload(token)
-#     try:
-#       tokenData = jwt.decode(token, SECRET, algorithms=["HS256"])
-#       data = {key: value for key, value in tokenData.items() if key not in {"exp", "scopes"}}
-#       accessToken = loginManager.create_access_token(data=data, scopes=tokenData["scopes"])
-#     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
-#       del(request.cookies["access-token"])
-#       accessToken = ""
+    # token = token.split(" ")[1]
+    # userID = loginManager._get_payload(token)
+    try:
+      tokenData = jwt.decode(token, SECRET, algorithms=["HS256"])
+      data = {key: value for key, value in tokenData.items() if key not in {"exp", "scopes"}}
+      accessToken = loginManager.create_access_token(data=data, scopes=tokenData["scopes"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
+      del(request.cookies["access-token"])
+      accessToken = ""
     
-#     response = await call_next(request)
-#     # print(response)
-#     if response.headers.get("Set-Cookie") and 'access-token="";' in response.headers.get("Set-Cookie"):
-#       pass
-#     elif accessToken:
-#       response.set_cookie(key="access-token", value=accessToken, httponly=True, secure=True, samesite="None")
-#       # response.set_cookie(key="access-token", value=accessToken)
-#     else:
-#       response.delete_cookie("access-token")
-#     return response
-#   else:
-#     return await call_next(request)
+    response = await call_next(request)
+    # print(response.headers)
+    if response.headers.get("Set-Cookie") and 'access-token="";' in response.headers.get("Set-Cookie"):
+      pass
+    elif accessToken:
+      response.set_cookie(key="access-token", value=accessToken, httponly=True, secure=True, samesite="None")
+      # response.set_cookie(key="access-token", value=accessToken)
+    else:
+      response.delete_cookie("access-token")
+    return response
+  else:
+    return await call_next(request)
 
 app.add_middleware(CORSMiddleware,
                     allow_origins=origins,
@@ -98,7 +99,7 @@ async def protected(token: str = Depends(loginManager)):
 
 if __name__ == "__main__":
   import uvicorn
-  uvicorn.run("server:app", host="0.0.0.0", port=5300)
-              # reload=True, ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
+  uvicorn.run("server:app", host="0.0.0.0", port=5300,
+              ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
   
   
