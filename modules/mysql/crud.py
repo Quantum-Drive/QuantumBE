@@ -225,7 +225,6 @@ def dbAddShare(db: Session, share: ShareSchema, userID: str):
 
 def dbGetSharing(db: Session, userID: str):
   dbItems = db.query(Data, Share).filter(Data.userID == userID).join(Share, Share.dataID == Data.id).all()
-  print(dbItems)
   return dbItems
 
 def dbGetShared(db: Session, receivedID: str):
