@@ -65,8 +65,6 @@ async def fillTrashbin(request: Request,
       dbDeleteTrash(db, user.email, trash.id)
       statuses[contentID] = {"status_code":400, "detail":"Failed to delete data"}
 
-  # real delete data
-
   return Response(content=json.dumps(statuses), status_code=207)
 
 
@@ -116,7 +114,6 @@ async def restore(contentID: int,
   
   dbItem, lPrevFiles, lNewFiles = dbRestoreTrash(db, contentID, treeRoot, user.email)
   if not dbItem:
-    print("!!!")
     raise HTTPException(status_code=400, detail="Failed to restore content")
   
   try:
