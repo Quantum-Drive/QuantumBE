@@ -3,13 +3,9 @@ import io
 import hashlib
 import base64
 import json
-import pickle
-import shutil
 import httpx
-import tarfile
 import asyncio
 import requests
-import tempfile
 from typing import Optional, Annotated
 from collections import namedtuple
 from collections.abc import Iterable
@@ -39,7 +35,7 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, dataID: int, file: bytes = None):
+async def getThumbnail(db: Session, user: User, dataID: int, file: UploadFile = None):
   extension = dbGetData(db, Data(id=dataID, userID=user.email)).extension
   tmp = dbGetExtension(db, extension)
   description = tmp.description if tmp else None
@@ -48,38 +44,18 @@ async def getThumbnail(db: Session, user: User, dataID: int, file: bytes = None)
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   
   if not os.path.exists(f"./thumbnails/{dataID}.png"):
-    if file:
-      try:
-        match (description):
-          case "image":
-            image = Image.fromarray(file.file.getvalue())
-          case "video":
-            # with tempfile.NamedTemporaryFile(delete=True, suffix=f".{extension}") as tempFile:
-            #   tempFile.write(file)
-            #   tempFile.flush()
-            image = fileUtils.clipVideo(file, extension)
-          case "audio":
-            pass
-          case "document":
-            pass
-      except Exception as e:
-        return None
-      with open(f"./thumbnails/{dataID}.png", "wb") as f:
-        f.write((fileUtils.thumbnail(image)).getvalue())
+    try:
+      async with httpx.AsyncClient() as client:
+        response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
+                                    params={"userHash": userHash, "fileID": dataID, "description": description},
+                                    timeout=None)
+        response.raise_for_status()
         
-    else:
-      try:
-        async with httpx.AsyncClient() as client:
-          response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
-                                      params={"userHash": userHash, "fileID": dataID, "description": description},
-                                      timeout=None)
-          response.raise_for_status()
-          
-          with open(f"./thumbnails/{dataID}.png", "wb") as f:
-            f.write(response.content)
-      except (httpx.RequestError, httpx.HTTPStatusError) as e:
-        return None
-  
+        with open(f"./thumbnails/{dataID}.png", "wb") as f:
+          f.write(response.content)
+    except (httpx.RequestError, httpx.HTTPStatusError) as e:
+      return None
+
   return Image.open(f"./thumbnails/{dataID}.png")
 
 router = APIRouter(prefix="/file", tags=["File"])
@@ -197,6 +173,7 @@ async def fileCache(filedata: DataSchemaAdd,
                                                   fileName=filedata.name, 
                                                   isEncrypted=filedata.isEncrypted, 
                                                   validationToken=filedata.validationToken))
+    print(filedata.validationToken)
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
   
@@ -215,6 +192,7 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   content = await file.read()
   validationToken = hashlib.sha256(content).hexdigest()
+  print(validationToken)
   cache = dbGetCache(cacheDB, userHash, validationToken)
   if not cache:
     raise HTTPException(status_code=400, detail="Data hash mismatch")
@@ -234,8 +212,6 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
   
-  await getThumbnail(mysqlDB, user, data.id, content)
-  
   async def iterStream():
     try:
       async with httpx.AsyncClient() as client:
@@ -246,7 +222,8 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
         response.raise_for_status()
     except httpx.RequestError as e:
       pass
-  asyncio.create_task(iterStream())
+  # asyncio.create_task(iterStream())
+  await iterStream()
   
   parentID = cache.parentID
   dbDeleteCache(cacheDB, userHash)
