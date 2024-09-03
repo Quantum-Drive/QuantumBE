@@ -31,6 +31,7 @@ class DataSchema(BaseModel):
     from_attributes = True
   
 class ShareSchema(BaseModel):
+  sharingID: int
   dataID: int
   receivedID: Optional[str]
   expiredTime: datetime
@@ -91,6 +92,10 @@ class DataSchemaUpdate(BaseModel):
     from_attributes = True
 
 # Share
+class ShareSchemaAdd(BaseModel):
+  dataID: int
+  receivedID: Optional[str]
+  expiredTime: Optional[datetime]
 
 # Trashbin
 class TrashSchema(BaseModel):

@@ -42,7 +42,7 @@ class Data(Base):
 class Share(Base):
   __tablename__ = 'shares'
   
-  id = Column(Integer, primary_key=True, index=True)
+  sharingID = Column(Integer, primary_key=True, index=True)
   dataID = Column(Integer, ForeignKey('data.id', ondelete='CASCADE'), index=True, nullable=True)
   receivedID = Column(String, ForeignKey('users.email', ondelete='CASCADE'), index=True, nullable=True)
   expiredTime = Column(DateTime)

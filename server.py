@@ -5,7 +5,7 @@ from dateutil.parser import parse
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, FileResponse
 from fastapi_login.exceptions import InvalidCredentialsException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from periodicTasks import sqliteJobs
 
-from routers import authenticator, profile, file, trashbin
+from routers import authenticator, profile, file, trashbin, share
 from routers.dependencies import loginManager, SECRET
 
 origins = [
@@ -30,6 +30,7 @@ app.include_router(authenticator.router)
 app.include_router(profile.router, dependencies=[Depends(loginManager)])
 app.include_router(file.router, dependencies=[Depends(loginManager)])
 app.include_router(trashbin.router, dependencies=[Depends(loginManager)])
+app.include_router(share.router, dependencies=[Depends(loginManager)])
 
 # @app.exception_handler(NotAuthenticatedException)
 # def authExceptionHandler(request: Request, exc: NotAuthenticatedException):
@@ -92,6 +93,10 @@ async def refreshToken(user = Depends(loginManager)):
                                                   scopes=['read:protected', 'write:protected'])
   return JSONResponse({"access_token": accessToken, "token_type":"bearer"}, status_code=200)
 
+@app.get("/.well-known/pki-validation/A67CC3CFC39F8E9FDCD7998C9AFD954C.txt")
+async def sslValidation():
+  return FileResponse(".well-known/pki-validation/A67CC3CFC39F8E9FDCD7998C9AFD954C.txt", status_code=200)
+
 # 보호된 엔드포인트
 @app.get("/protected")
 async def protected(token: str = Depends(loginManager)):
@@ -100,6 +105,7 @@ async def protected(token: str = Depends(loginManager)):
 if __name__ == "__main__":
   import uvicorn
   uvicorn.run("server:app", host="0.0.0.0", port=5300,
-              ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
+              # ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
+              ssl_keyfile="crt/private.key", ssl_certfile="crt/certificate.crt", ssl_ca_certs="crt/ca_bundle.crt")
   
   

@@ -10,7 +10,7 @@ from .model import User, Data, Share, Extension, Trash
 from .schema import UserSchema, DataSchema, ShareSchema, TrashSchema
 from .schema import UserSchemaAdd, UserSchemaUpdate
 from .schema import DataSchemaAdd, DataSchemaGet, DataSchemaUpdate
-
+from .schema import ShareSchemaAdd
 from .schema import ExtensionSchema
 
 # User CRUD
@@ -214,7 +214,7 @@ def _dbExtractDataTree(db: Session, userID: str, parentNode: tree.Node):
   return lFiles
 
 # Share CRUD
-def dbAddShare(db: Session, share: ShareSchema, userID: str):
+def dbAddShare(db: Session, share: ShareSchemaAdd, userID: str):
   dbItem = Share(dataID=share.dataID,
                 receivedID=share.receivedID,
                 expiredTime=share.expiredTime)
@@ -222,6 +222,11 @@ def dbAddShare(db: Session, share: ShareSchema, userID: str):
   db.commit()
   db.refresh(dbItem)
   return dbItem
+
+def dbGetShare(db: Session, share: ShareSchema):
+  dbItem = db.query(Share)
+  return dbItem.filter(Share.sharingID == share.sharingID).first()
+    
 
 def dbGetSharing(db: Session, userID: str):
   dbItems = db.query(Data, Share).filter(Data.userID == userID).join(Share, Share.dataID == Data.id).all()

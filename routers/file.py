@@ -1,5 +1,5 @@
 import os
-import io
+import re
 import hashlib
 import base64
 import json
@@ -35,28 +35,32 @@ def jsonParse(jsonStr: str):
   except json.JSONDecodeError:
     return None
 
-async def getThumbnail(db: Session, user: User, dataID: int, file: UploadFile = None):
-  extension = dbGetData(db, Data(id=dataID, userID=user.email)).extension
-  tmp = dbGetExtension(db, extension)
-  description = tmp.description if tmp else None
-  if not description in ["image", "video", "audio", "document"]:
-    return None
-  userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
-  
-  if not os.path.exists(f"./thumbnails/{dataID}.png"):
-    try:
-      async with httpx.AsyncClient() as client:
-        response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
-                                    params={"userHash": userHash, "fileID": dataID, "description": description},
-                                    timeout=None)
-        response.raise_for_status()
+async def getThumbnail(db: Session, user: User, data: dict):
+  userHash = hashlib.sha256(data["userID"].encode('utf-8')).hexdigest()
+  dataID = data["id"]
+  if not data["isDirectory"]:
+    if not os.path.exists(f"./thumbnails/{dataID}.png"):
+      try:
+        async with httpx.AsyncClient() as client:
         
-        with open(f"./thumbnails/{dataID}.png", "wb") as f:
-          f.write(response.content)
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-      return None
+          response = await client.get(urljoin(DS_HOST, "file/thumbnail"), 
+                                      params={"userHash": userHash, "fileID": dataID, "extension": data["extension"]},
+                                      timeout=None)
+          
+          response.raise_for_status()
+          # response = requests.get(urljoin(DS_HOST, "file/thumbnail"), 
+          #                         params={"userHash": userHash, "fileID": dataID, "extension": data.extension})
+          
+          with open(f"./thumbnails/{dataID}.png", "wb") as f:
+            f.write(response.content)
+        
+      except (httpx.RequestError, httpx.HTTPStatusError) as e:
+      # except requests.exceptions.RequestException as e:
+        return None
 
-  return Image.open(f"./thumbnails/{dataID}.png")
+    return Image.open(f"./thumbnails/{dataID}.png")
+
+  return None
 
 router = APIRouter(prefix="/file", tags=["File"])
 
@@ -75,11 +79,38 @@ async def fileInfoGet(resourcekey: str = Query(None),
     sPath = base64.b64decode(resourcekey).decode('utf-8')
   else:
     sPath = "/"
+  
+  owner = user
+  pattern = re.compile(r"^\(.*\)$")
+  sPath = fileUtils.pathSplit(sPath)
+  tmp = sPath[0] if sPath else ""
+  if re.match(pattern, tmp) and (tmp := dbGetUser(db, tmp[1:-1])):
+    owner = tmp
+    sPath = "/".join(sPath[1:])
+  
   flag, msg = fileUtils.isAvailablePath(sPath)
   if not flag:
     raise HTTPException(status_code=400, detail=msg)
   
-  lPathData = dbGetPath(db, user.email, sPath=sPath)
+  
+  lPathData = dbGetPath(db, owner.email, sPath=sPath)
+  if user.email != owner.email and not lPathData:
+    raise HTTPException(status_code=404, detail="Path not found")
+  
+  
+  flag = True
+  lPathData.reverse()
+  lSharedData = [shared[0] for shared in dbGetShared(db, user.email)]
+  if lPathData:
+    flag = False
+  for item in lPathData:
+    if item in lSharedData:
+      flag = True
+      break
+  if not flag:
+    raise HTTPException(status_code=403, detail="Permission denied")
+
+  lPathData.reverse()
   if not lPathData:
     parentID = None
   else:
@@ -87,29 +118,28 @@ async def fileInfoGet(resourcekey: str = Query(None),
   
   match (filter):
     case "favorite":
-      data = dbSearchData(db, Data(userID=user.email, isFavorite=True), filterParentID=False)
+      data = dbSearchData(db, Data(userID=owner.email, isFavorite=True), filterParentID=False)
     case "share":
-      data = dbGetSharing(db, user.email)
+      data = dbGetSharing(db, owner.email)
     case "shared":
-      data = dbGetShared(db, user.email)
+      data = dbGetShared(db, owner.email)
     case "image":
-      data = dbGetDataByFileDescription(db, user.email, "image")
+      data = dbGetDataByFileDescription(db, owner.email, "image")
     case "video":
-      data = dbGetDataByFileDescription(db, user.email, "video")
+      data = dbGetDataByFileDescription(db, owner.email, "video")
     case "audio":
-      data = dbGetDataByFileDescription(db, user.email, "audio")
+      data = dbGetDataByFileDescription(db, owner.email, "audio")
     case "document":
-      data = dbGetDataByFileDescription(db, user.email, "document")
+      data = dbGetDataByFileDescription(db, owner.email, "document")
     case "encrypted":
-      data = dbSearchData(db, Data(userID=user.email, parentID=parentID, isEncrypted=True), filterParentID=True)  
+      data = dbSearchData(db, Data(userID=owner.email, parentID=parentID, isEncrypted=True), filterParentID=True)  
     case "recent":
       return HTTPException(status_code=400, detail="Not implemented yet")
       pass
     case None:
-      data = dbSearchData(db, Data(userID=user.email, parentID=parentID), filterParentID=True)
+      data = dbSearchData(db, Data(userID=owner.email, parentID=parentID), filterParentID=True)
     case _:
       return HTTPException(status_code=400, detail="Invalid filter")
-  
   
   data = dbUtils.model2dict(data)
   match (order):
@@ -126,12 +156,12 @@ async def fileInfoGet(resourcekey: str = Query(None),
   
   data = data[offset:] if len(data) > offset else []
   data = data[:limit] if limit and len(data) > limit else data
-  
+
   for item in data:
-    item["resourcekey"] = base64.b64encode(("/"+getPath(db, user.email, objID=item["parentID"])).encode('utf-8')).decode()
+    item["resourcekey"] = base64.b64encode(("/"+getPath(db, owner.email, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
     
-    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item["id"]))
+    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, owner, item))
   
   return data
 
@@ -164,7 +194,7 @@ async def fileCache(filedata: DataSchemaAdd,
   
   data = dbSearchData(mysqlDB, Data(name=filedata.name, userID=user.email, parentID=parentID,), True)
   if data:
-    raise HTTPException(status_code=400, detail="File(same name) already exists")
+    raise HTTPException(status_code=409, detail="File(same name) already exists")
   if filedata.isDirectory:
     data = dbAddData(mysqlDB, filedata, user.email, 0, parentID)
   else:
@@ -173,7 +203,6 @@ async def fileCache(filedata: DataSchemaAdd,
                                                   fileName=filedata.name, 
                                                   isEncrypted=filedata.isEncrypted, 
                                                   validationToken=filedata.validationToken))
-    print(filedata.validationToken)
   if not data:
     raise HTTPException(status_code=400, detail="Failed to insert data")
   
@@ -192,14 +221,14 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
   content = await file.read()
   validationToken = hashlib.sha256(content).hexdigest()
-  print(validationToken)
+  
   cache = dbGetCache(cacheDB, userHash, validationToken)
   if not cache:
     raise HTTPException(status_code=400, detail="Data hash mismatch")
   
   data = dbSearchData(mysqlDB, Data(name=cache.fileName, userID=user.email, parentID=cache.parentID), True)
   if data:
-    raise HTTPException(status_code=400, detail="File(same name) already exists")
+    raise HTTPException(status_code=409, detail="File(same name) already exists")
   
   if len(content)+dbGetUsedVolume(mysqlDB, user.email) > (defaultMaxVolume := user.maxVolume if user.maxVolume else 1024*1024*1024*50):
     raise HTTPException(status_code=400, detail=f"File size exceeds the maximum volume({defaultMaxVolume})")
@@ -273,7 +302,7 @@ async def fileSearch(keyword: str = Query(...),
   for item in data:
     item["resourcekey"] = base64.b64encode(("/"+getPath(db, user.email, objID=item["parentID"])).encode('utf-8')).decode()
     del(item["parentID"])
-    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item["id"]))
+    item["thumbnail"] = fileUtils.img2DataURL(await getThumbnail(db, user, item))
   
   return data
 
