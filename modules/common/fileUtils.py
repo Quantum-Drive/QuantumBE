@@ -50,7 +50,7 @@ def loadPickle(sPath: str):
 
 def isAvailablePath(sPath="/"):
   if not sPath:
-    return False, "Invalid path"
+    return True, "Valid path"
   
   if len(sPath.encode('utf-8')) > 4096:
     return False, "Too long path"
