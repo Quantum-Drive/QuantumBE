@@ -97,6 +97,10 @@ async def refreshToken(user = Depends(loginManager)):
 async def sslValidation():
   return FileResponse(".well-known/pki-validation/A67CC3CFC39F8E9FDCD7998C9AFD954C.txt", status_code=200)
 
+@app.get("/robots.txt")
+async def robots():
+  return FileResponse("robots.txt", status_code=200)
+
 # 보호된 엔드포인트
 @app.get("/protected")
 async def protected(token: str = Depends(loginManager)):
