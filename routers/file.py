@@ -9,7 +9,7 @@ import requests
 from typing import Optional, Annotated
 from collections import namedtuple
 from collections.abc import Iterable
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 from PIL import Image
 from fastapi import APIRouter, Request, Depends, HTTPException, File, UploadFile, Query, Response
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
@@ -19,7 +19,7 @@ from modules.common import *
 
 from modules.mysql.model import User, Data
 from modules.mysql.schema import DataSchema, DataSchemaAdd, DataSchemaGet, DataSchemaUpdate, TrashSchema
-from modules.mysql.crud import dbGetUser, dbAddData, dbSearchData, dbGetData, dbUpdateData, dbUpdateDataVolume, dbDeleteData, dbGetUsedVolume, getPath, dbGetPath, dbAddShare, dbGetSharing, dbGetShared, dbDeleteShare, dbExtractDataTree, dbGetExtension, dbGetDataByFileDescription, dbAddTrash
+from modules.mysql.crud import dbGetUser, dbAddData, dbSearchData, dbGetData, dbUpdateData, dbUpdateDataVolume, dbDeleteData, dbGetUsedVolume, getPath, dbGetPath, dbGetSharing, dbGetShared, dbGetDataForShare, dbGetExtension, dbGetDataByFileDescription, dbAddTrash
 from modules.mysql.database import getMySQLDB
 
 from modules.sqlite.model import DataCache
@@ -313,6 +313,13 @@ def fileDataGet(contentID: int,
                 db: Session = Depends(getMySQLDB)):
   data = dbGetData(db, Data(id=contentID, userID=user.email))
   if not data:
+    shares = [s[0] for s in dbGetShared(db, user.email)]
+    for share in shares:
+      if share.id == contentID:
+        data = share
+        break
+  
+  if not data:
     raise HTTPException(status_code=404, detail="Data not found")
   
   return data
@@ -362,10 +369,19 @@ def fileDelete(contentID: int,
 async def fileDownload(contentID: int,
                  user: User = Depends(loginManager),
                  db: Session = Depends(getMySQLDB)):
+  owner = user
   data: Data = dbGetData(db, Data(id=contentID, userID=user.email))
   if not data:
+    shares = [s[0] for s in dbGetShared(db, user.email)]
+    for share in shares:
+      if share.id == contentID:
+        data = share
+        owner = dbGetUser(db, data.userID)
+        break
+  
+  if not data:
     raise HTTPException(status_code=404, detail="Data not found")
-  userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
+  userHash = hashlib.sha256(owner.email.encode('utf-8')).hexdigest()
   try:
     async with httpx.AsyncClient() as client:
       response = await client.get(urljoin(DS_HOST, "file/"), params={"userHash":userHash, "fileID": data.id}, timeout=None)
@@ -374,7 +390,7 @@ async def fileDownload(contentID: int,
       async def iterStream():
         async for chunk in response.aiter_bytes(chunk_size=65536):
           yield chunk
-      headers = {"Content-Disposition": f'attachment; filename="{data.name}"'}
+      headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(data.name)}"}
       return StreamingResponse(iterStream(), media_type="application/octet-stream", headers=headers)
   except httpx.RequestError as e:
     raise HTTPException(status_code=400, detail=f"Failed to get the file: {e}")
