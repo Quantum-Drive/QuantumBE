@@ -12,9 +12,9 @@ from .dependencies import loginManager
 
 router = APIRouter(prefix="/share", tags=["Share"])
 
-@router.get("/")
-def getShare():
-  return {"message": "Hello World"}
+# @router.get("/")
+# def getShare():
+#   return {"message": "Hello World"}
 
 @router.post("/")
 async def fileShare(shareSchemaAdd: ShareSchemaAdd,
@@ -33,14 +33,15 @@ async def fileShare(shareSchemaAdd: ShareSchemaAdd,
 async def fileUnshare(sharingID: int,
                       user: User = Depends(loginManager),
                       db: Session = Depends(getMySQLDB)):
-  share = dbGetShare(db, Share(sharingId=sharingID))
+  share = dbGetShare(db, Share(sharingID=sharingID))
   if not share:
     raise HTTPException(status_code=404, detail="Share not found")
   
   data = dbGetData(db, Data(id=share.dataID, userID=user.email))
-  if not data:
+  if share.receivedID != user.email and not data:
     raise HTTPException(status_code=404, detail="Data not found")
   
-  if not dbDeleteShare(db, share):
+  
+  if not dbDeleteShare(db, sharingID):
     raise HTTPException(status_code=400, detail="Failed to unshare")
   return Response(status_code=204)
