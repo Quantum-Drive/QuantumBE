@@ -227,7 +227,6 @@ def dbGetShare(db: Session, share: ShareSchema):
   dbItem = db.query(Share)
   return dbItem.filter(Share.sharingID == share.sharingID).first()
     
-
 def dbGetSharing(db: Session, userID: str):
   dbItems = db.query(Data, Share).filter(Data.userID == userID).join(Share, Share.dataID == Data.id).all()
   return dbItems
@@ -236,15 +235,19 @@ def dbGetShared(db: Session, receivedID: str):
   dbItem = db.query(Data, Share).filter(Share.receivedID == receivedID).join(Data, Data.id==Share.dataID and Data.userID == receivedID).all()
   return dbItem
 
-def dbDeleteShare(db: Session, dataID: int, receivedID: str):
+def dbDeleteShare(db: Session, sharingID: int):
   try:
-    dbItem = db.query(Share).filter(Share.dataID == dataID, Share.receivedID == receivedID).first()
+    dbItem = db.query(Share).filter(Share.sharingID == sharingID).first()
     db.delete(dbItem)
     db.commit()
     return True
   except SQLAlchemyError:
     db.rollback()
     return False
+
+def dbGetDataForShare(db: Session, dataID: int): # caution: security issue
+  dbItem = db.query(Data).filter(Data.id == dataID).first()
+  return dbItem
 
 # Extension CRUD
 def dbAddExtension(db: Session, extensionSchema: ExtensionSchema):
