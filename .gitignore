@@ -4,6 +4,8 @@ __pycache__/
 *.pyo
 *.pyd
 thumbnails/*.png
+.well-known/
+crt/
 
 # Test files
 dirCreate.py
