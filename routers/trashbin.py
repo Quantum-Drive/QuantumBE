@@ -60,6 +60,8 @@ async def fillTrashbin(request: Request,
         if response.status_code != 201 or not dbDeleteData(db, user.email, data.id):
           statuses[contentID] = {"status_code":response.status_code, "detail":response.text}
         else:
+          if os.path.exists(f"./thumbnails/{contentID}.png"):
+            os.remove(f"./thumbnails/{contentID}.png")
           statuses[contentID] = {"status_code":response.status_code, "detail":"Data deleted successfully"}
     except requests.exceptions.RequestException as e:
       dbDeleteTrash(db, user.email, trash.id)
