@@ -1,8 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from config.quantumDriveDB import HOST, PORT, ID, PW, MIN, MAX
-
 from .model import Base
 
 # DATABASE_URL = f'sqlite:///:memory:'
