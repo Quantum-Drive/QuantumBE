@@ -24,7 +24,7 @@ async def fileShare(shareSchemaAdd: ShareSchemaAdd,
   if not data:
     raise HTTPException(status_code=404, detail="Data not found")
   
-  share = dbAddShare(db, shareSchemaAdd)
+  share = dbAddShare(db, user.email, shareSchemaAdd)
   if not share:
     raise HTTPException(status_code=400, detail="Failed to share")
   return share
