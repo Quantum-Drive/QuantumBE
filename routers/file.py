@@ -87,6 +87,8 @@ async def fileInfoGet(resourcekey: str = Query(None),
   if re.match(pattern, tmp) and (tmp := dbGetUser(db, tmp[1:-1])):
     owner = tmp
     sPath = "/".join(sPath[1:])
+  else:
+    sPath = "/".join(sPath)
   
   flag, msg = fileUtils.isAvailablePath(sPath)
   if not flag:
@@ -97,20 +99,21 @@ async def fileInfoGet(resourcekey: str = Query(None),
   if user.email != owner.email and not lPathData:
     raise HTTPException(status_code=404, detail="Path not found")
   
-  
-  flag = True
-  lPathData.reverse()
-  lSharedData = [shared[0] for shared in dbGetShared(db, user.email)]
-  if lPathData:
-    flag = False
-  for item in lPathData:
-    if item in lSharedData:
-      flag = True
-      break
-  if not flag:
-    raise HTTPException(status_code=403, detail="Permission denied")
+  if user.email != owner.email:
+    flag = True
+    lPathData.reverse()
+    lSharedData = [shared[0] for shared in dbGetShared(db, user.email)]
+    if lPathData:
+      flag = False
+    for item in lPathData:
+      if item in lSharedData:
+        flag = True
+        break
+    if not flag:
+      raise HTTPException(status_code=403, detail="Permission denied")
 
-  lPathData.reverse()
+    lPathData.reverse()
+  
   if not lPathData:
     parentID = None
   else:
