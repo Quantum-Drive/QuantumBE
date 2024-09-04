@@ -8,7 +8,7 @@ class UserSchema(BaseModel):
   phonenum: str
   username: str
   password: str
-  profilePath: Optional[str]
+  profileExt: Optional[str]
   createdAt: datetime
   lastUsed: datetime
   maxVolume: int
@@ -56,12 +56,9 @@ class UserSchemaAdd(BaseModel):
   password: str
 
 class UserSchemaUpdate(BaseModel):
-  email: str
   phonenum: Optional[str]
   username: Optional[str]
   password: Optional[str]
-  profileImg: Optional[str]
-  lastUsed: Optional[datetime]
   
   class Config:
     from_attributes = True
