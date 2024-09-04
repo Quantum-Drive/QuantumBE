@@ -99,3 +99,9 @@ def img2DataURL(img: Image.Image, format: str = "PNG"):
   img.save(imgByteArr, format=format)
   imgByteArr = imgByteArr.getvalue()
   return f"data:image/{format.lower()};base64,{base64.b64encode(imgByteArr).decode('utf-8')}"
+
+def bytes2DataURL(data: bytes, format: str = "PNG"):
+  if not data:
+    return None
+  
+  return f"data:image/{format.lower()};base64,{base64.b64encode(data).decode('utf-8')}"
