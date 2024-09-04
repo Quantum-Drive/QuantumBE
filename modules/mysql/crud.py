@@ -251,15 +251,6 @@ def dbDeleteShare(db: Session, sharingID: int):
     db.rollback()
     return False
 
-def dbDeleteExpiredShare(db: Session):
-  dbItems = db.query(Share).filter(Share.expiredTime < datetime.now()).all()
-  for item in dbItems:
-    try:
-      db.delete(item)
-      db.commit()
-    except SQLAlchemyError:
-      db.rollback()
-
 def dbGetDataForShare(db: Session, dataID: int): # caution: security issue
   dbItem = db.query(Data).filter(Data.id == dataID).first()
   return dbItem
