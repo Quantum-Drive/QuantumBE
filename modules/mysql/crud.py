@@ -31,22 +31,28 @@ def dbGetUser(db: Session, email: str):
   dbItem = db.query(User).filter(User.email == email).first()
   return dbItem
 
-def dbUpdateUser(db: Session, user: User, userSchemaUpdate: UserSchemaUpdate):
-  dbItem = db.query(User).filter(User.email == user.email).first()
+def dbUpdateUser(db: Session, userID: str, userSchemaUpdate: UserSchemaUpdate):
+  dbItem = db.query(User).filter(User.email == userID).first()
   if not dbItem:
     return None
   
-  if user.phonenum is not None:
+  if userSchemaUpdate.phonenum is not None:
     dbItem.phonenum = userSchemaUpdate.phonenum
   if userSchemaUpdate.username is not None:
     dbItem.username = userSchemaUpdate.username
   if userSchemaUpdate.password is not None:
     dbItem.password = userSchemaUpdate.password
-  if userSchemaUpdate.profileImg is not None:
-    dbItem.profilePath = userSchemaUpdate.profilePath
-  if userSchemaUpdate.lastUsed is not None:
-    dbItem.lastUsed = userSchemaUpdate.lastUsed
   
+  db.commit()
+  db.refresh(dbItem)
+  return dbItem
+
+def dbUpdateUserImage(db: Session, userID: str, ext: str):
+  dbItem = db.query(User).filter(User.email == userID).first()
+  if not dbItem:
+    return None
+  
+  dbItem.profileExt = ext
   db.commit()
   db.refresh(dbItem)
   return dbItem
@@ -214,7 +220,7 @@ def _dbExtractDataTree(db: Session, userID: str, parentNode: tree.Node):
   return lFiles
 
 # Share CRUD
-def dbAddShare(db: Session, share: ShareSchemaAdd, userID: str):
+def dbAddShare(db: Session, userID: str, share: ShareSchemaAdd):
   dbItem = Share(dataID=share.dataID,
                 receivedID=share.receivedID,
                 expiredTime=share.expiredTime)
@@ -244,6 +250,15 @@ def dbDeleteShare(db: Session, sharingID: int):
   except SQLAlchemyError:
     db.rollback()
     return False
+
+def dbDeleteExpiredShare(db: Session):
+  dbItems = db.query(Share).filter(Share.expiredTime < datetime.now()).all()
+  for item in dbItems:
+    try:
+      db.delete(item)
+      db.commit()
+    except SQLAlchemyError:
+      db.rollback()
 
 def dbGetDataForShare(db: Session, dataID: int): # caution: security issue
   dbItem = db.query(Data).filter(Data.id == dataID).first()
