@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from modules.mysql.database import SessionLocal
 from modules.mysql.model import User
 
+from modules.mongo.logger import MongoDBLogger
+
 DS_HOST = "http://121.157.24.40:5299"
 BASE_PATH = "/data/quantumDrive/files"
 # BASE_PATH = "./files"
@@ -26,3 +28,5 @@ def getUser(email: str, db: Session = None):
     with SessionLocal() as db:
       return db.query(User).filter(User.email == email).first()
   return db.query(User).filter(User.email == email).first()
+
+mongoDBLogger = MongoDBLogger()
