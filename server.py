@@ -11,10 +11,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from apscheduler.schedulers.background import BackgroundScheduler
+
 from periodicTasks import sqliteJobs
 
+from modules.mongo.logger import MongoDBLogger
+
 from routers import authenticator, profile, file, trashbin, share
-from routers.dependencies import loginManager, SECRET
+from routers.dependencies import loginManager, SECRET, mongoDBLogger
 
 origins = [
   "http://localhost:5300",
@@ -47,9 +50,9 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
+  mongoDBLogger.close()
   scheduler.shutdown()
 
-@app.middleware("https")
 @app.middleware("http")
 async def refreshSession(request: Request, call_next):
   # if request.headers and request.headers.get("Authorization"):
@@ -80,12 +83,30 @@ async def refreshSession(request: Request, call_next):
   else:
     return await call_next(request)
 
+@app.middleware("https")
+async def logRequests(request: Request, call_next):
+  userID = None
+  if request.cookies and (accessToken := request.cookies.get("access-token")):
+    try:
+      if user := await loginManager.get_current_user(accessToken):
+        userID = user.email
+    except Exception:
+      pass
+  
+  response = await call_next(request)
+  await mongoDBLogger.logRequest(request, response, userID)
+  return response
+
 app.add_middleware(CORSMiddleware,
                     allow_origins=origins,
                     allow_credentials=True,
                     allow_methods=["*"],
                     allow_headers=["*"],
                     )
+
+@app.get("/")
+async def root():
+  return {"message": "Hello World"}
 
 @app.get("/token")
 async def refreshToken(user = Depends(loginManager)):
