@@ -27,7 +27,7 @@ from modules.sqlite.schema import DataCacheSchema
 from modules.sqlite.crud import dbCreateCache, dbGetCache, dbDeleteCache
 from modules.sqlite.database import getSQLiteDB
 
-from .dependencies import loginManager, DS_HOST, BASE_PATH, USER_ROOT_PATH, TRASH_PATH, TEMP_PATH
+from .dependencies import loginManager, DS_HOST, BASE_PATH, USER_ROOT_PATH, TRASH_PATH, TEMP_PATH, mongoDBLogger
 
 def jsonParse(jsonStr: str):
   try:
@@ -137,8 +137,20 @@ async def fileInfoGet(resourcekey: str = Query(None),
     case "encrypted":
       data = dbSearchData(db, Data(userID=owner.email, parentID=parentID, isEncrypted=True), filterParentID=True)  
     case "recent":
-      return HTTPException(status_code=400, detail="Not implemented yet")
-      pass
+      query = mongoDBLogger.initQuery()
+      query["user_id"] = owner.email
+      query["uri"] = {"$regex": r"\d+/?$"}
+      logs = await mongoDBLogger.getLogs(query)
+      data = []
+      for log in logs:
+        uri = log["uri"]
+        if uri[-1] == "/":
+          uri = uri[:-1]
+        
+        try:
+          data.append(dbGetData(db, Data(id=int(uri.split("/")[-1]), userID=owner.email)))
+        except (ValueError, IndexError) as e:
+          pass
     case None:
       data = dbSearchData(db, Data(userID=owner.email, parentID=parentID), filterParentID=True)
     case _:
@@ -311,7 +323,7 @@ async def fileSearch(keyword: str = Query(...),
 
 
 @router.get("/{contentID}")
-def fileDataGet(contentID: int,
+async def fileDataGet(contentID: int,
                 user: User = Depends(loginManager),
                 db: Session = Depends(getMySQLDB)):
   data = dbGetData(db, Data(id=contentID, userID=user.email))
@@ -329,7 +341,7 @@ def fileDataGet(contentID: int,
 
 
 @router.put("/{contentID}")
-def fileUpdate(contentID: int,
+async def fileUpdate(contentID: int,
                 updateData: DataSchemaUpdate,
                 user: User = Depends(loginManager),
                 db: Session = Depends(getMySQLDB)):
@@ -341,7 +353,7 @@ def fileUpdate(contentID: int,
   return updatedData
 
 @router.delete("/{contentID}")
-def fileDelete(contentID: int,
+async def fileDelete(contentID: int,
                 user: User = Depends(loginManager),
                 db: Session = Depends(getMySQLDB)):
   data = dbGetData(db, Data(id=contentID, userID=user.email))
@@ -440,5 +452,14 @@ async def filePreview(contentID: int,
   
   return data
 
-
+@router.post("/favorite/{contentID}")
+async def fileFavorite(contentID: int,
+                        user: User = Depends(loginManager),
+                        db: Session = Depends(getMySQLDB)):
+  data = dbGetData(db, Data(id=contentID, userID=user.email))
+  if not data:
+    raise HTTPException(status_code=404, detail="Data not found")
+  
+  data = dbUpdateData(db, Data(isFavorite=not data.isFavorite), user.email, contentID)
+  return data
 
