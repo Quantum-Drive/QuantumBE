@@ -16,6 +16,8 @@ from periodicTasks import sqliteJobs
 
 from modules.mongo.logger import MongoDBLogger
 
+from analyzer.videoVision import VectorStore
+
 from routers import authenticator, profile, file, trashbin, share
 from routers.dependencies import loginManager, SECRET, mongoDBLogger
 
@@ -124,12 +126,17 @@ async def robots():
 
 # 보호된 엔드포인트
 @app.get("/protected")
-async def protected(token: str = Depends(loginManager)):
+async def protected(token: str = Depends(loginManager),
+                    query: str = None):
+  if query:
+    data = VectorStore.search(query)
+    print(data)
+  
   return {"message": f"Hello, {token.username}!"}
 
 if __name__ == "__main__":
   import uvicorn
-  uvicorn.run("server:app", host="0.0.0.0", port=5300,
+  uvicorn.run("server:app", host="0.0.0.0", port=5300, reload=True,
               # ssl_keyfile="quantumdrive.com+4-key.pem", ssl_certfile="quantumdrive.com+4.pem")
               ssl_keyfile="crt/private.key", ssl_certfile="crt/certificate.crt", ssl_ca_certs="crt/ca_bundle.crt")
   
