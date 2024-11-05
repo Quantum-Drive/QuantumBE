@@ -325,7 +325,10 @@ def dbRestoreTrash(db: Session, id: int, root: tree.Tree, userID: str):
   if not dbItem:
     return None, [], []
   
-  parentID = dbGetPath(db, userID, sPath=root.value["path"])
+  try:
+    parentID = dbGetPath(db, userID, sPath=root.value["path"])
+  except Exception as e:
+    parentID = []
   if len(parentID) > 1:
     parentID = parentID[-1].id
   elif parentID:
@@ -347,12 +350,33 @@ def _dbRestoreTrash(db: Session, node: tree.Node, userID: str, parentID: int = N
   flag = False
   lPrevFiles = []
   lNewFiles = []
+  print("%%%%")
   dbItems = dbSearchData(db, Data(userID=userID, name=node.value["name"], parentID=parentID), filterParentID=True)
   if dbItems:
-    if not dbItems[0].isDirectory or dbItems[0].isDirectory != node.value["isDirectory"]:
-      return None, [], []
-    dbItem = dbItems[0]
-    flag = True
+    if (not dbItems[0].isDirectory or dbItems[0].isDirectory != node.value["isDirectory"]):
+      if dbItems[0].name == node.value["name"]:
+        tmp = node.value["name"].split(".")
+        if len(tmp) > 1:
+          tmp = ".".join(tmp) + f" ({len(dbItems)})" + tmp[-1]
+        else:
+          tmp = node.value["name"] + f" ({len(dbItems)})"
+        dbItem = Data(name=tmp,
+                    volume=node.value["volume"],
+                    isEncrypted=node.value["isEncrypted"],
+                    userID=node.value["userID"],
+                    isDirectory=node.value["isDirectory"],
+                    parentID=parentID,
+                    createdAt=node.value["createdAt"],
+                    extension=dbMatchExtension(db, node.value),
+                    isFavorite=False)
+
+        db.add(dbItem)
+        if not node.value["isDirectory"]:
+          lPrevFiles.append(node.value["id"]) 
+          lNewFiles.append(dbItem.id)
+    else:
+      dbItem = dbItems[0]
+      flag = True
   else:
     if not dbSearchData(db, Data(id=node.value["id"])):
       dbItem = Data(id=node.name,
