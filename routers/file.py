@@ -1,8 +1,10 @@
 import os
+import io
 import re
 import hashlib
 import base64
 import json
+import pickle
 import httpx
 import asyncio
 import requests
@@ -26,6 +28,8 @@ from modules.sqlite.model import DataCache
 from modules.sqlite.schema import DataCacheSchema
 from modules.sqlite.crud import dbCreateCache, dbGetCache, dbDeleteCache
 from modules.sqlite.database import getSQLiteDB
+
+from analyzer.videoVision import VectorStore
 
 from .dependencies import loginManager, DS_HOST, BASE_PATH, USER_ROOT_PATH, TRASH_PATH, TEMP_PATH, mongoDBLogger
 
@@ -274,6 +278,9 @@ async def fileUpload(file: Optional[UploadFile] = File(None),
   
   if not dbUpdateDataVolume(mysqlDB, parentID):
     raise HTTPException(status_code=400, detail="File upload failed")
+  if (description := dbGetExtension(mysqlDB, data.extension).description) in ["image", "video", "text"]:
+    asyncio.run(VectorStore.store(data.id, content, description))
+  
   return JSONResponse({"message": "File uploaded successfully"}, status_code=201)
 
 
@@ -293,8 +300,11 @@ async def fileSearch(keyword: str = Query(...),
     if word in "%_":
       tmp += "%"
     tmp += word
+
+  data = []
+  data += dbSearchData(db, Data(name=keyword, userID=user.email))
+  # VectorStore.search(keyword)
   
-  data = dbSearchData(db, Data(name=keyword, userID=user.email))
   if not data:
     return []
   
@@ -393,9 +403,9 @@ async def fileDownload(contentID: int,
         data = share
         owner = dbGetUser(db, data.userID)
         break
-  
   if not data:
     raise HTTPException(status_code=404, detail="Data not found")
+  
   userHash = hashlib.sha256(owner.email.encode('utf-8')).hexdigest()
   try:
     async with httpx.AsyncClient() as client:
@@ -417,38 +427,42 @@ async def filePreview(contentID: int,
                         limit: int = Query(None),
                         user: User = Depends(loginManager),
                         db: Session = Depends(getMySQLDB)):
+  owner = user
   data: Data = dbGetData(db, Data(id=contentID, userID=user.email))
+  if not data:
+    shares = [s[0] for s in dbGetShared(db, user.email)]
+    for share in shares:
+      if share.id == contentID:
+        data = share
+        owner = dbGetUser(db, data.userID)
+        break
   if not data:
     raise HTTPException(status_code=404, detail="Data not found")
   
-  userHash = hashlib.sha256(user.email.encode('utf-8')).hexdigest()
+  userHash = hashlib.sha256(owner.email.encode('utf-8')).hexdigest()
   try:
     extensionData = dbGetExtension(db, data.extension)
     
     data.description = extensionData.description
     
-    sPath = os.path.join(BASE_PATH, userHash, USER_ROOT_PATH, getPath(db, user.email, objID=data.id))
+    data.contents=[]
     match (extensionData.description):
-      case "document":
-        if data.extension == "pdf":
-          if not limit:
-            data.preview, data.next = contentUtils.pdf2ImageList(sPath, offset)
-          else:
-            data.preview, data.next = contentUtils.pdf2ImageList(sPath, offset, limit)
-        elif data.extension == "txt":
-          with open(sPath, "r") as f:
-            data.preview = f.read()
-        # elif data.extension in ["doc", "docx"]:
-        #   data.preview = contentUtils.doc2Text(sPath)
-      
-      case "image":
-        data.preview = contentUtils.img2DataURL(contentUtils.loadImg(sPath), data.extension)
-      case "video":
-        data.preview = contentUtils.img2DataURL(contentUtils.clipVideo(sPath), "jpeg")
-      case _:
-        data.preview = None
+      case ("document"|"image"|"video"):
+        try:
+          async with httpx.AsyncClient() as client:
+            response = await client.get(urljoin(DS_HOST, "file/preview"), params={"userHash":userHash, "fileID": data.id, "extension": data.extension}, timeout=None)
+            response.raise_for_status()
+
+            if response.status_code == 200:
+              images = pickle.loads(response.content)
+              tmp = data.extension if data.description == "image" else "png"
+              
+              for image in images:
+                data.contents.append(fileUtils.img2DataURL(image, tmp))
+        except httpx.RequestError as e:
+          raise HTTPException(status_code=400, detail=f"Failed to get the file: {e}")
   except (AttributeError, IndexError, ValueError):
-    data.description = None 
+    data.description = None
   
   return data
 
@@ -462,4 +476,3 @@ async def fileFavorite(contentID: int,
   
   data = dbUpdateData(db, Data(isFavorite=not data.isFavorite), user.email, contentID)
   return data
-
