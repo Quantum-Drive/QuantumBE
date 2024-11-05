@@ -118,14 +118,15 @@ async def restore(contentID: int,
   if not dbItem:
     raise HTTPException(status_code=400, detail="Failed to restore content")
   
-  try:
-    response = requests.put(urljoin(DS_HOST, "trash"), 
-                            params={"userHash": userHash},
-                            data={"trashID": trash.id, "lPrevFiles": lPrevFiles, "lNewFiles": lNewFiles})
-    if response.status_code != 201:
-      raise HTTPException(status_code=response.status_code, detail=response.text)
-  except requests.exceptions.RequestException as e:
-    raise HTTPException(status_code=400, detail="Failed to restore content")
+  if lPrevFiles:
+    try:
+      response = requests.put(urljoin(DS_HOST, "trash"), 
+                              params={"userHash": userHash},
+                              data={"trashID": trash.id, "lPrevFiles": lPrevFiles, "lNewFiles": lNewFiles})
+      if response.status_code != 201:
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+    except requests.exceptions.RequestException as e:
+      raise HTTPException(status_code=400, detail="Failed to restore content")
   
   if not dbUpdateDataVolume(db, dbItem.id):
     raise HTTPException(status_code=400, detail="Failed to update data volume")
