@@ -7,6 +7,10 @@ __pycache__/
 thumbnails/*.png
 .well-known/
 crt/
+chroma/
+config/
+activate/
+cache/
 
 # Test files
 dirCreate.py
