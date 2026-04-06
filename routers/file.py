@@ -152,7 +152,7 @@ async def fileInfoGet(resourcekey: str = Query(None),
           uri = uri[:-1]
         
         try:
-          data.append(dbGetData(db, Data(id=int(uri.split("/")[-1]), userID=owner.email)))
+          data.append(dbGetData(db, Data(id=int(uri.split("/")[-1]), userID=user.email)))
         except (ValueError, IndexError) as e:
           pass
     case None:
@@ -461,7 +461,7 @@ async def filePreview(contentID: int,
                 data.contents.append(fileUtils.img2DataURL(image, tmp))
         except httpx.RequestError as e:
           raise HTTPException(status_code=400, detail=f"Failed to get the file: {e}")
-  except (AttributeError, IndexError, ValueError):
+  except (AttributeError, IndexError, ValueError) as e:
     data.description = None
   
   return data
